@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "SlashCommand(/speckit.specify 프로젝트 기본 구조 및 SQLite 데이터베이스 설정: JSScada 시스템의 기본 디렉토리 구조 생성 및 SQLite 로컬 데이터베이스 스키마 구축. 라인(lines), 공정(processes), PLC 연결(plc_connections), 태그(tags), 폴링 그룹(polling_groups) 테이블 생성. 14자리 설비 코드 체계 지원(예: KRCWO12ELOA101). 3,491개 태그를 지원하는 마스터 데이터 구조. CSV 일괄 등록 기능 포함. 백엔드는 Python 3.11+, 프론트엔드는 Next.js 14+, SQLite 3.40+ 사용. backend/, frontend-admin/, frontend-monitor/ 디렉토리 구조.)",
+      "Bash(.specify/scripts/bash/update-agent-context.sh:*)",
+      "Bash(python:*)",
+      "Bash(sqlite3:*)",
+      "Bash(git add:*)",
+      "SlashCommand(/speckit.specify Python 백엔드 - MC 3E ASCII 프로토콜 통신 및 Connection Pool: Mitsubishi Q Series PLC와 MC 3E ASCII 프로토콜로 TCP/IP 통신. PLC당 5개 연결을 재사용하는 Connection Pool 구현. pymcprotocol 라이브러리 사용. 배치 읽기로 10-50개 태그를 한 번에 조회. 연결 상태 확인 및 자동 재연결. 타임아웃 처리. 기존 SQLite DB의 plc_connections 테이블과 tags 테이블 활용. 연결 실패 시 로깅 및 재시도 로직. 성능: 태그당 평균 응답시간 50ms 이하.)",
+      "Bash(git fetch:*)",
+      "Bash(.specify/scripts/bash/create-new-feature.sh:*)",
+      "Bash(.specify/scripts/bash/setup-plan.sh:*)",
+      "Bash(git checkout:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

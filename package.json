@@ -1,0 +1,22 @@
+{
+  "name": "jsscada-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:admin": "npm run dev --workspace=apps/admin",
+    "dev:monitor": "npm run dev --workspace=apps/monitor",
+    "dev": "npm run dev:admin & npm run dev:monitor",
+    "build:admin": "npm run build --workspace=apps/admin",
+    "build:monitor": "npm run build --workspace=apps/monitor",
+    "build": "npm run build --workspace=packages/ui && npm run build --workspace=packages/utils && npm run build:admin && npm run build:monitor",
+    "lint": "npm run lint --workspaces --if-present",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}
