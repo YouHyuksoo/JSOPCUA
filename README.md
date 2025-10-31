@@ -31,7 +31,14 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 
 ## 빠른 시작
 
-### Backend 설정
+### 1. 전체 설치 (모노레포)
+
+```bash
+# 루트에서 모든 워크스페이스 설치
+npm install
+```
+
+### 2. Backend 설정
 
 ```bash
 cd backend
@@ -54,51 +61,47 @@ python src/scripts/init_database.py
 python src/scripts/create_sample_data.py
 ```
 
-### Frontend Admin 설정
+### 3. Frontend 개발 서버 실행
 
 ```bash
-cd frontend-admin
+# 루트에서 실행
 
-# 의존성 설치
-npm install
+# Admin 웹 (http://localhost:3000)
+npm run dev:admin
 
-# 개발 서버 시작 (http://localhost:3000)
+# Monitor 웹 (http://localhost:3001)
+npm run dev:monitor
+
+# 둘 다 실행
 npm run dev
 ```
 
-### Frontend Monitor 설정
-
-```bash
-cd frontend-monitor
-
-# 의존성 설치
-npm install
-
-# 개발 서버 시작 (http://localhost:3001)
-npm run dev
-```
-
-## 프로젝트 구조
+## 프로젝트 구조 (모노레포)
 
 ```
 JSOPCUA/
-├── backend/              # Python 백엔드
-│   ├── config/          # SQLite DB 및 설정
-│   ├── logs/            # 로그 파일
+├── apps/                 # 애플리케이션
+│   ├── admin/           # Next.js 관리 웹 (@jsscada/admin)
+│   │   ├── app/         # App Router
+│   │   ├── components/  # 앱 전용 컴포넌트
+│   │   └── lib/         # 앱 전용 유틸리티
+│   └── monitor/         # Next.js 모니터링 웹 (@jsscada/monitor)
+│       ├── app/         # App Router
+│       ├── components/  # 앱 전용 컴포넌트
+│       └── lib/         # 앱 전용 유틸리티
+├── packages/            # 공용 패키지
+│   ├── ui/             # 공용 UI 컴포넌트 (@jsscada/ui)
+│   └── utils/          # 공용 유틸리티 (@jsscada/utils)
+├── backend/            # Python 백엔드
+│   ├── config/         # SQLite DB 및 설정
+│   ├── logs/           # 로그 파일
 │   ├── src/
-│   │   ├── database/    # DB 모델 및 관리
-│   │   └── scripts/     # 유틸리티 스크립트
-│   └── tests/           # 테스트
-├── frontend-admin/       # Next.js 관리 웹
-│   ├── app/             # App Router
-│   ├── components/      # React 컴포넌트
-│   └── lib/             # 유틸리티 함수
-├── frontend-monitor/     # Next.js 모니터링 웹
-│   ├── app/             # App Router
-│   ├── components/      # React 컴포넌트
-│   └── lib/             # 유틸리티 함수
-├── docs/                # 프로젝트 문서
-└── specs/               # 기능 명세 (SpecKit)
+│   │   ├── database/   # DB 모델 및 관리
+│   │   └── scripts/    # 유틸리티 스크립트
+│   └── tests/          # 테스트
+├── docs/               # 프로젝트 문서
+├── specs/              # 기능 명세 (SpecKit)
+└── package.json        # 모노레포 루트 설정
 ```
 
 ## 데이터베이스 스키마

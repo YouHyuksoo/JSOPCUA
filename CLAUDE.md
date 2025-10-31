@@ -207,6 +207,8 @@ During implementation, automatically create/verify ignore files based on detecte
 
 ## Active Technologies
 - SQLite 파일 기반 데이터베이스 (backend/config/scada.db) (001-project-structure-sqlite-setup)
+- Python 3.11+ + pymcprotocol (PLC 통신), queue (스레드 안전 큐), threading (멀티스레딩) (002-mc3e-protocol-pool)
+- SQLite (Feature 1의 plc_connections, tags 테이블 활용) (002-mc3e-protocol-pool)
 
 ## Recent Changes
 - 001-project-structure-sqlite-setup: Added SQLite 파일 기반 데이터베이스 (backend/config/scada.db)
