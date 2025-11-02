@@ -17,7 +17,16 @@
       "Bash(then echo \"exists\")",
       "Bash(else echo \"not_exists\")",
       "Bash(fi)",
-      "Bash(venv/Scripts/pip install:*)"
+      "Bash(venv/Scripts/pip install:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nImplement Feature 2: MC 3E ASCII Protocol and Connection Pool\n\nComplete implementation of PLC communication module with connection pooling.\n\nFeatures implemented:\n- MC 3E ASCII protocol client (pymcprotocol)\n- Connection pool (5 connections per PLC)\n- Single tag read with timeout handling\n- Batch tag read with automatic address grouping\n- Automatic reconnection with exponential backoff\n- Idle connection cleanup (10 min timeout)\n- Error handling and logging\n- Multi-PLC pool manager\n\nComponents:\n- backend/src/plc/models.py: Data models for PLC communication\n- backend/src/plc/exceptions.py: Custom exception classes\n- backend/src/plc/__init__.py: Logging setup with RotatingFileHandler\n- backend/src/plc/mc3e_client.py: MC 3E ASCII protocol client\n- backend/src/plc/connection_pool.py: Connection pool implementation\n- backend/src/plc/pool_manager.py: Multi-PLC pool manager\n- backend/src/plc/utils.py: Tag address parsing and grouping utilities\n\nTest scripts:\n- backend/src/scripts/test_plc_connection.py: PLC connection test\n- backend/src/scripts/test_batch_read.py: Batch read performance test\n- backend/src/scripts/test_error_recovery.py: Error recovery test\n\nUser Stories completed:\n- US1 (P1): PLC connection and single tag read - MVP\n- US2 (P1): Connection pool for connection reuse - MVP\n- US3 (P2): Batch read for multiple tags\n- US4 (P2): Connection loss detection and auto-reconnection\n- US5 (P3): Timeout handling and error recovery\n\nAll 50 tasks completed (T001-T050)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "SlashCommand(/speckit.specify Python 백엔드 - 멀티 스레드 폴링 엔진 (FIXED/HANDSHAKE 모드): Feature 2의 PoolManager를 사용하여 PLC 태그를 주기적으로 읽는 멀티 스레드 폴링 엔진 구현. FIXED 모드는 고정 주기(예: 1초, 5초)로 자동 폴링. HANDSHAKE 모드는 외부 트리거(REST API 호출)로 수동 폴링. SQLite의 polling_groups 테이블에서 폴링 설정 로드(그룹명, 모드, 주기, 태그 목록). 각 폴링 그룹은 독립적인 스레드에서 실행. 스레드 안전한 큐에 읽은 데이터 저장(Feature 4로 전달). 폴링 시작/중지/상태 조회 API. 에러 발생 시 로깅 및 재시도. 성능: 최대 10개 폴링 그룹 동시 실행, 그룹당 최소 100개 태그 지원.)",
+      "Bash(cat:*)",
+      "Bash(nul)",
+      "Bash(if [ -d \"D:/Project/JSOPCUA/specs/003-polling-engine/checklists\" ])",
+      "Bash(.specify/scripts/bash/check-prerequisites.sh:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

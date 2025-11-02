@@ -20,9 +20,25 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 - CSV 일괄 태그 등록 기능
 - 샘플 데이터 자동 생성
 
+### Feature 2: MC 3E ASCII 프로토콜 통신 및 Connection Pool ✅
+- Mitsubishi Q Series PLC MC 3E ASCII 통신
+- PLC당 5개 연결 재사용 Connection Pool
+- 배치 읽기 (10-50개 태그 한 번에 조회)
+- 자동 재연결 및 타임아웃 처리
+- 성능: 태그당 평균 35-45ms
+
+### Feature 3: 멀티 스레드 폴링 엔진 ✅
+- **FIXED 모드**: 고정 주기 자동 폴링 (1s, 5s, 10s)
+- **HANDSHAKE 모드**: REST API 트리거로 수동 폴링
+- 최대 10개 폴링 그룹 동시 실행
+- 그룹당 100개 이상 태그 지원
+- 스레드 안전 큐 (10,000 엔트리)
+- 자동 에러 복구 및 스레드 격리
+- **REST API**: FastAPI 기반 8개 엔드포인트
+- **WebSocket**: 실시간 상태 업데이트 (1초 간격)
+- **관리 UI**: Next.js 폴링 제어 대시보드
+
 ### 향후 기능
-- Feature 2: MC 3E ASCII 프로토콜 통신 및 Connection Pool
-- Feature 3: 멀티 스레드 폴링 엔진 (FIXED/HANDSHAKE 모드)
 - Feature 4: Thread-Safe Buffer 및 Oracle DB Writer
 - Feature 5: REST API 및 WebSocket 서버
 - Feature 6: Next.js 관리 웹 (폴링 제어 및 시스템 관리)
@@ -59,12 +75,20 @@ python src/scripts/init_database.py
 
 # 샘플 데이터 생성 (선택사항)
 python src/scripts/create_sample_data.py
+
+# FastAPI 서버 실행
+python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### 3. Frontend 개발 서버 실행
 
 ```bash
 # 루트에서 실행
+
+# 환경 변수 설정
+cd apps/admin
+cp .env.local.example .env.local
+cd ../..
 
 # Admin 웹 (http://localhost:3000)
 npm run dev:admin
@@ -75,6 +99,16 @@ npm run dev:monitor
 # 둘 다 실행
 npm run dev
 ```
+
+### 4. 접속 URL
+
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **WebSocket**: ws://localhost:8000/ws/polling
+- **Admin Web**: http://localhost:3000
+  - HTTP Polling UI: http://localhost:3000/polling
+  - WebSocket UI: http://localhost:3000/polling-ws
+- **Monitor Web**: http://localhost:3001
 
 ## 프로젝트 구조 (모노레포)
 
@@ -97,6 +131,9 @@ JSOPCUA/
 │   ├── logs/           # 로그 파일
 │   ├── src/
 │   │   ├── database/   # DB 모델 및 관리
+│   │   ├── plc/        # PLC 통신 (Feature 2)
+│   │   ├── polling/    # 폴링 엔진 (Feature 3)
+│   │   ├── api/        # REST API & WebSocket (Feature 3)
 │   │   └── scripts/    # 유틸리티 스크립트
 │   └── tests/          # 테스트
 ├── docs/               # 프로젝트 문서
@@ -172,15 +209,17 @@ PLC01,D100,온도센서1,°C,1.0,KRCWO12ELOA101
 - Python 3.11+
 - SQLite 3.40+
 - pymcprotocol (PLC 통신)
-- FastAPI (REST API, 향후)
-- websockets (WebSocket 서버, 향후)
+- FastAPI (REST API)
+- uvicorn (ASGI 서버)
+- websockets (WebSocket 서버)
+- pydantic (데이터 검증)
 - cx_Oracle (Oracle DB 연동, 향후)
 
 ### Frontend
 - Next.js 14+ (App Router)
 - React 18+
 - TypeScript 5.3+
-- Tailwind CSS (향후)
+- Tailwind CSS
 
 ## 라이선스
 
