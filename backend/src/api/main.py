@@ -12,6 +12,7 @@ from polling.polling_engine import PollingEngine
 from plc.pool_manager import PoolManager
 from .polling_routes import router as polling_router, set_polling_engine
 from .websocket_handler import websocket_endpoint, set_websocket_engine
+from .buffer_routes import router as buffer_router, set_buffer_components
 
 # Global instances
 pool_manager: PoolManager = None
@@ -71,6 +72,8 @@ app.add_middleware(
 
 # Include routers
 app.include_router(polling_router)
+# NOTE: buffer_router is included but components must be set via set_buffer_components()
+# app.include_router(buffer_router)  # Uncomment when buffer/writer are running
 
 
 # WebSocket endpoint

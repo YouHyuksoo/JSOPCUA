@@ -116,12 +116,12 @@
 
 ### Implementation for User Story 4
 
-- [ ] T032 [P] [US4] Create buffer_routes.py in backend/src/api/ with GET /api/buffer/metrics endpoint
-- [ ] T033 [P] [US4] Implement metrics aggregation in backend/src/oracle_writer/metrics.py (current buffer size, max size, utilization %, write counts, rolling averages)
-- [ ] T034 [US4] Integrate buffer metrics route in backend/src/api/main.py (register buffer_routes router)
-- [ ] T035 [US4] Add backup file count tracking in backend/src/oracle_writer/backup.py (count .csv files in backup/ directory)
-- [ ] T036 [US4] Extend Admin UI monitoring page (apps/admin/app/buffer/page.tsx) to display buffer metrics
-- [ ] T037 [US4] Create monitoring test script backend/src/scripts/test_buffer_metrics.py (query API, verify metrics accuracy)
+- [X] T032 [P] [US4] Create buffer_routes.py in backend/src/api/ with GET /api/buffer/metrics endpoint
+- [X] T033 [P] [US4] Implement metrics aggregation in backend/src/oracle_writer/metrics.py (current buffer size, max size, utilization %, write counts, rolling averages)
+- [X] T034 [US4] Integrate buffer metrics route in backend/src/api/main.py (register buffer_routes router)
+- [X] T035 [US4] Add backup file count tracking in backend/src/oracle_writer/backup.py (count .csv files in backup/ directory)
+- [X] T036 [US4] Extend Admin UI monitoring page (apps/admin/app/buffer/page.tsx) to display buffer metrics
+- [X] T037 [US4] Create monitoring test script backend/src/scripts/test_buffer_metrics.py (query API, verify metrics accuracy)
 
 **Checkpoint**: Real-time monitoring operational - full observability via API and UI
 
