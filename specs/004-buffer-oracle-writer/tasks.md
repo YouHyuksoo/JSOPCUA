@@ -99,10 +99,10 @@
 
 ### Implementation for User Story 3
 
-- [ ] T028 [P] [US3] Add overflow detection in backend/src/buffer/circular_buffer.py (track overflow count when deque maxlen evicts items)
-- [ ] T029 [P] [US3] Implement overflow alerts in backend/src/buffer/circular_buffer.py (log warnings with overflow statistics)
-- [ ] T030 [US3] Add overflow rate calculation in backend/src/oracle_writer/metrics.py (track overflow percentage over 1-hour rolling window)
-- [ ] T031 [US3] Create test script backend/src/scripts/test_buffer_overflow.py (fill buffer, verify FIFO eviction, check overflow <1%)
+- [X] T028 [P] [US3] Add overflow detection in backend/src/buffer/circular_buffer.py (track overflow count when deque maxlen evicts items)
+- [X] T029 [P] [US3] Implement overflow alerts in backend/src/buffer/circular_buffer.py (log warnings with overflow statistics)
+- [X] T030 [US3] Add overflow rate calculation in backend/src/oracle_writer/metrics.py (track overflow percentage over 1-hour rolling window)
+- [X] T031 [US3] Create test script backend/src/scripts/test_buffer_overflow.py (fill buffer, verify FIFO eviction, check overflow <1%)
 
 **Checkpoint**: Buffer overflow protection complete - system stable under extreme load
 
