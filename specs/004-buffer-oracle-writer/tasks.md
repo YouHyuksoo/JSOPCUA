@@ -131,16 +131,16 @@
 
 **Purpose**: Integration, graceful shutdown, documentation
 
-- [ ] T038 [P] Implement graceful shutdown in backend/src/buffer/buffer_consumer.py (flush remaining buffer data within 10s)
-- [ ] T039 [P] Implement graceful shutdown in backend/src/oracle_writer/writer.py (complete pending batch writes)
-- [ ] T040 [P] Create integrated startup script backend/src/scripts/start_all.py (Feature 3 polling + Feature 4 buffer + Oracle writer)
-- [ ] T041 [P] Create graceful shutdown script backend/src/scripts/stop_all.py (stop all threads, flush buffers, close connections)
-- [ ] T042 [P] Add comprehensive logging configuration in backend/src/buffer/__init__.py (RotatingFileHandler for buffer.log)
-- [ ] T043 [P] Add comprehensive logging configuration in backend/src/oracle_writer/__init__.py (RotatingFileHandler for oracle_writer.log)
-- [ ] T044 Create README for buffer module in backend/src/buffer/README.md (architecture overview, usage examples)
-- [ ] T045 Create README for Oracle writer module in backend/src/oracle_writer/README.md (configuration guide, troubleshooting)
-- [ ] T046 Update main backend/README.md with Feature 4 integration instructions
-- [ ] T047 Create integration test backend/tests/integration/test_end_to_end.py (Feature 3 polling → Feature 4 buffer → Oracle → verify data)
+- [X] T038 [P] Implement graceful shutdown in backend/src/buffer/buffer_consumer.py (flush remaining buffer data within 10s)
+- [X] T039 [P] Implement graceful shutdown in backend/src/oracle_writer/writer.py (complete pending batch writes)
+- [X] T040 [P] Create integrated startup script backend/src/scripts/start_all.py (Feature 3 polling + Feature 4 buffer + Oracle writer)
+- [X] T041 [P] Create graceful shutdown script backend/src/scripts/stop_all.py (stop all threads, flush buffers, close connections)
+- [X] T042 [P] Add comprehensive logging configuration in backend/src/buffer/__init__.py (RotatingFileHandler for buffer.log)
+- [X] T043 [P] Add comprehensive logging configuration in backend/src/oracle_writer/__init__.py (RotatingFileHandler for oracle_writer.log)
+- [X] T044 Create README for buffer module in backend/src/buffer/README.md (architecture overview, usage examples)
+- [X] T045 Create README for Oracle writer module in backend/src/oracle_writer/README.md (configuration guide, troubleshooting)
+- [X] T046 Update main backend/README.md with Feature 4 integration instructions
+- [X] T047 Create integration test backend/tests/integration/test_end_to_end.py (Feature 3 polling → Feature 4 buffer → Oracle → verify data)
 
 ---
 

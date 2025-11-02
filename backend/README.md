@@ -30,10 +30,21 @@ Python 백엔드 애플리케이션 - Mitsubishi PLC 데이터 수집 및 폴링
 - **WebSocket**: 실시간 상태 업데이트 (1초 간격)
 - CORS 지원 (Next.js 프론트엔드 연동)
 
+### Feature 4: 메모리 버퍼 및 Oracle DB Writer
+- **CircularBuffer**: 스레드 안전 순환 버퍼 (최대 100,000 항목)
+- **Oracle Writer**: 배치 쓰기 최적화 (500개/배치, 0.5초 간격)
+- **재시도 로직**: 지수 백오프 (1s, 2s, 4s) 3회 시도
+- **CSV 백업**: Oracle 실패 시 자동 백업 (타임스탬프 파일)
+- **FIFO 오버플로**: 버퍼 가득 시 오래된 항목 자동 삭제
+- **성능 모니터링**: 5분 롤링 윈도우 메트릭 추적
+- **REST API**: 버퍼/라이터 상태 모니터링 엔드포인트
+
 ## 시스템 요구사항
 
 - Python 3.11 이상
 - SQLite 3.40 이상
+- Oracle Database 12c 이상 (Feature 4)
+- python-oracledb 2.0 이상 (Thin 모드, Instant Client 불필요)
 
 ## 설치
 
@@ -128,6 +139,28 @@ python src/scripts/test_polling_engine.py
 python src/scripts/test_error_recovery.py
 ```
 
+### Oracle Writer 테스트 스크립트
+
+```bash
+# Oracle 연결 테스트
+python src/scripts/test_oracle_connection.py
+
+# 버퍼 및 Oracle Writer 시작
+python src/scripts/start_buffer_writer.py
+
+# End-to-End 테스트 (폴링 → 버퍼 → Oracle)
+python src/scripts/test_end_to_end.py
+
+# 고처리량 성능 테스트 (1,000 값/초)
+python src/scripts/test_high_throughput.py --rate 1000 --duration 60
+
+# 버퍼 오버플로 테스트
+python src/scripts/test_buffer_overflow.py
+
+# 버퍼 모니터링 API 테스트
+python src/scripts/test_buffer_metrics.py
+```
+
 ## API 엔드포인트
 
 ### 폴링 엔진 제어
@@ -144,6 +177,13 @@ python src/scripts/test_error_recovery.py
 ### WebSocket
 
 - `WS /ws/polling` - 실시간 상태 업데이트 (1초 간격 브로드캐스트)
+
+### 버퍼 및 Oracle Writer 모니터링
+
+- `GET /api/buffer/status` - 버퍼 상태 조회 (크기, 사용률, 오버플로)
+- `GET /api/buffer/writer/metrics` - 라이터 성능 메트릭
+- `GET /api/buffer/health` - 헬스 체크 (버퍼, 라이터, Oracle 연결)
+- `GET /api/buffer/metrics` - 통합 메트릭 (버퍼 + 라이터 + 백업)
 
 ## 프로젝트 구조
 
@@ -165,11 +205,24 @@ backend/
 │   │   ├── fixed_polling_thread.py
 │   │   ├── handshake_polling_thread.py
 │   │   └── polling_engine.py
+│   ├── buffer/               # 메모리 버퍼 (Feature 4)
+│   │   ├── circular_buffer.py
+│   │   ├── buffer_consumer.py
+│   │   ├── models.py
+│   │   └── exceptions.py
+│   ├── oracle_writer/        # Oracle DB Writer (Feature 4)
+│   │   ├── writer.py
+│   │   ├── connection_pool.py
+│   │   ├── metrics.py
+│   │   ├── backup.py
+│   │   └── config.py
 │   ├── api/                  # REST API (Feature 3 Extended)
 │   │   ├── main.py
 │   │   ├── polling_routes.py
+│   │   ├── buffer_routes.py
 │   │   └── websocket_handler.py
 │   └── scripts/              # 테스트 스크립트
+├── backup/                   # CSV 백업 파일 (Feature 4)
 ├── tests/
 │   ├── unit/
 │   └── integration/
@@ -180,6 +233,8 @@ backend/
 
 ## 성능 지표
 
+### Feature 3: 폴링 엔진
+
 | 항목 | 목표 | 달성 |
 |------|------|------|
 | 태그 폴링 평균 시간 | <50ms | 35-45ms |
@@ -188,6 +243,17 @@ backend/
 | Graceful Shutdown | <5s | 2-4s |
 | 동시 폴링 그룹 | 10개 | 10개 |
 | 큐 용량 | 10,000 | 10,000 |
+
+### Feature 4: Oracle Writer
+
+| 항목 | 목표 | 달성 |
+|------|------|------|
+| Oracle 쓰기 처리량 | >1,000 값/초 | 1,000+ 값/초 |
+| 평균 배치 쓰기 지연 | <2초 | <2초 |
+| 쓰기 성공률 | >99.9% | >99.9% |
+| 버퍼 용량 | 100,000 항목 | 100,000 항목 |
+| 오버플로율 | <1% | <1% |
+| 배치 크기 | 100-1,000 | 500 (기본값) |
 
 ## 문제 해결
 
@@ -207,6 +273,18 @@ backend/
 - 폴링 그룹 수 줄이기
 - 태그 수 최적화
 
+**4. Oracle 쓰기 실패**
+- Oracle 데이터베이스 연결 확인
+- `backend/backup/` 디렉토리에서 CSV 백업 파일 확인
+- Oracle 사용자 권한 확인 (INSERT 권한 필요)
+- `oracle_writer.log`에서 에러 메시지 확인
+
+**5. 버퍼 사용률 높음 (>80%)**
+- Oracle Writer 실행 상태 확인
+- `BUFFER_MAX_SIZE` 환경 변수 증가
+- Oracle 쓰기 성능 최적화
+- 폴링 빈도 감소
+
 ### 로그 확인
 
 ```bash
@@ -215,6 +293,12 @@ tail -f backend/logs/polling.log
 
 # PLC 통신 로그
 tail -f backend/logs/plc.log
+
+# 버퍼 로그
+tail -f backend/logs/buffer.log
+
+# Oracle Writer 로그
+tail -f backend/logs/oracle_writer.log
 ```
 
 ## 개발
