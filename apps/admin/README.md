@@ -1,260 +1,118 @@
-# JSScada Admin Frontend
+# JSScada Admin Web Application
 
-Next.js 기반 관리자 웹 애플리케이션 - 폴링 엔진 모니터링 및 제어
+Next.js 기반 SCADA 시스템 관리 웹 애플리케이션
 
 ## 기능
 
-### 폴링 엔진 관리
-- 실시간 폴링 그룹 상태 모니터링
-- 개별 그룹 시작/중지 제어
-- 전체 그룹 일괄 제어
-- HANDSHAKE 모드 수동 트리거
-- 데이터 큐 상태 모니터링
-- 성능 통계 시각화
+### 1. 마스터 데이터 관리
+- **라인 관리**: 생산 라인 CRUD
+- **공정 관리**: 공정 CRUD 및 라인 연결
+- **PLC 관리**: PLC 연결 정보 관리 및 연결 테스트
+- **태그 관리**: 태그 CRUD 및 CSV 일괄 업로드
 
-### UI 페이지
-- **HTTP Polling UI** (`/polling`): 2초 간격 HTTP 폴링
-- **WebSocket UI** (`/polling-ws`): 실시간 WebSocket 업데이트
+### 2. 폴링 제어
+- **폴링 그룹 관리**: 폴링 그룹 생성 및 설정
+- **폴링 제어**: 시작/중지/재시작 기능
+- **태그 그룹화**: 폴링 주기별 태그 그룹 설정
 
-## 시스템 요구사항
+### 3. 시스템 모니터링
+- **실시간 대시보드**: CPU, 메모리, 디스크 사용률
+- **PLC 연결 상태**: 연결된 PLC 수 및 상태
+- **폴링 그룹 상태**: 실행 중인 그룹 수
+- **버퍼 상태**: 버퍼 크기 및 사용률
 
-- Node.js 18 이상
-- npm 또는 yarn
+### 4. 로그 조회
+- **4종 로그 파일**: scada.log, error.log, communication.log, performance.log
+- **로그 필터링**: 로그 타입별 조회
+- **실시간 조회**: 최신 로그 100개 조회
 
-## 설치
+## 기술 스택
 
-### 1. 의존성 설치
+- **Framework**: Next.js 14.2.33 (App Router)
+- **Language**: TypeScript 5.3+
+- **UI Library**: shadcn/ui
+- **Styling**: Tailwind CSS
+- **Form Management**: React Hook Form + Zod
+- **HTTP Client**: Axios
+- **CSV Processing**: Papa Parse
+- **Toast Notifications**: Sonner
 
-**프로젝트 루트에서** (monorepo):
+## 설치 및 실행
+
+### 설치
 ```bash
 npm install
 ```
 
-**또는 apps/admin에서 직접**:
-```bash
-cd apps/admin
-npm install
-```
-
-### 2. 환경 설정
-
-```bash
-# .env.local.example을 .env.local로 복사
-cp .env.local.example .env.local
-
-# 필요시 .env.local 파일 수정
-```
-
-`.env.local` 내용:
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws/polling
-NEXT_PUBLIC_POLLING_INTERVAL=2000
-```
-
-## 실행
-
-### 개발 모드
-
-**프로젝트 루트에서** (권장):
+### 개발 서버 실행
 ```bash
 npm run dev
 ```
 
-**또는 apps/admin에서 직접**:
+애플리케이션이 http://localhost:3000 에서 실행됩니다.
+
+### 빌드
 ```bash
-cd apps/admin
-npm run dev
-```
-
-접속: http://localhost:3000
-
-### 프로덕션 빌드
-
-```bash
-# 빌드
 npm run build
-
-# 실행
-npm run start
 ```
 
-## 사용 방법
-
-### HTTP Polling 페이지 (`/polling`)
-
-1. 브라우저에서 http://localhost:3000/polling 접속
-2. 전체 엔진 상태가 2초마다 자동 갱신됩니다
-3. 데이터 큐 상태 및 성능 차트 확인
-4. 개별 그룹 또는 전체 그룹 제어
-
-**기능**:
-- 자동 새로고침 (2초 간격)
-- Start All / Stop All 버튼
-- 개별 그룹 Start / Stop
-- HANDSHAKE 모드 Trigger Poll 버튼
-- 실시간 통계 표시
-
-### WebSocket 페이지 (`/polling-ws`)
-
-1. 브라우저에서 http://localhost:3000/polling-ws 접속
-2. WebSocket 연결로 실시간 업데이트 (1초 간격)
-3. 연결 상태 표시 (초록색 점: 연결됨, 빨간색 점: 연결 끊김)
-4. 연결 끊김 시 자동 재연결 (최대 10회 시도)
-
-**기능**:
-- 실시간 업데이트 (WebSocket, 1초 간격)
-- 자동 재연결 (exponential backoff)
-- 연결 상태 표시
-- HTTP Polling 페이지와 동일한 제어 기능
-
-## 컴포넌트
-
-### QueueMonitor
-데이터 큐 상태 시각화 컴포넌트
-
-**기능**:
-- 큐 사용률 프로그레스 바
-- 경고 표시 (70% 이상, 90% 이상)
-- 현재 크기, 최대 크기, 사용 가능 공간 표시
-
-### PollingChart
-폴링 성능 차트 컴포넌트
-
-**기능**:
-- 성공률 바 차트 (그룹별)
-- 평균 폴링 시간 비교
-- 색상 코딩 (성공률에 따라)
-- Canvas 기반 렌더링
-
-## API 클라이언트
-
-TypeScript API 클라이언트 (`lib/api/pollingApi.ts`):
-
-```typescript
-import { pollingApi } from '@/lib/api/pollingApi';
-
-// 엔진 상태 조회
-const status = await pollingApi.getEngineStatus();
-
-// 그룹 시작
-await pollingApi.startGroup('MyGroup');
-
-// 그룹 중지
-await pollingApi.stopGroup('MyGroup');
-
-// HANDSHAKE 트리거
-const result = await pollingApi.triggerHandshake('MyGroup');
+### 프로덕션 실행
+```bash
+npm start
 ```
 
-## WebSocket Hook
+## 환경 변수
 
-React Hook (`lib/hooks/usePollingWebSocket.ts`):
+`.env.local` 파일을 생성하고 다음 변수를 설정하세요:
 
-```typescript
-import { usePollingWebSocket } from '@/lib/hooks/usePollingWebSocket';
-
-function MyComponent() {
-  const { status, isConnected, error, reconnect } = usePollingWebSocket();
-  
-  // status: 현재 엔진 상태
-  // isConnected: WebSocket 연결 상태
-  // error: 에러 메시지
-  // reconnect: 수동 재연결 함수
-}
+```env
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
 ```
 
 ## 프로젝트 구조
 
 ```
 apps/admin/
-├── app/
-│   ├── polling/              # HTTP Polling UI
-│   │   ├── page.tsx
-│   │   └── components/
-│   │       ├── QueueMonitor.tsx
-│   │       └── PollingChart.tsx
-│   └── polling-ws/           # WebSocket UI
-│       └── page.tsx
-├── lib/
-│   ├── api/
-│   │   └── pollingApi.ts     # API 클라이언트
-│   └── hooks/
-│       └── usePollingWebSocket.ts  # WebSocket Hook
-├── public/
-├── package.json
-├── .env.local.example
+├── app/                      # Next.js App Router 페이지
+│   ├── dashboard/           # 시스템 대시보드
+│   ├── lines/               # 라인 관리
+│   ├── logs/                # 로그 조회
+│   ├── plcs/                # PLC 관리
+│   ├── polling-groups/      # 폴링 그룹 관리
+│   ├── processes/           # 공정 관리
+│   ├── tags/                # 태그 관리
+│   ├── layout.tsx           # 루트 레이아웃
+│   └── page.tsx             # 홈페이지
+├── components/              # React 컴포넌트
+│   ├── forms/              # 폼 컴포넌트
+│   ├── ui/                 # shadcn/ui 컴포넌트
+│   ├── DeleteDialog.tsx    # 삭제 확인 다이얼로그
+│   ├── Loading.tsx         # 로딩 스피너
+│   └── nav.tsx             # 네비게이션 바
+├── lib/                     # 유틸리티 및 API
+│   ├── api/                # API 클라이언트 모듈
+│   ├── types/              # TypeScript 타입 정의
+│   ├── validators/         # Zod 스키마
+│   └── utils.ts            # 유틸리티 함수
 └── README.md
 ```
 
-## 스타일링
+## 사용자 시나리오
 
-- **프레임워크**: Tailwind CSS
-- **색상 팔레트**:
-  - 성공: Green (bg-green-600)
-  - 에러: Red (bg-red-600)
-  - 경고: Yellow (bg-yellow-500)
-  - FIXED 모드: Blue (bg-blue-100)
-  - HANDSHAKE 모드: Purple (bg-purple-100)
+### 1. 신규 생산 라인 설정
+1. 라인 관리 페이지에서 새 라인 생성
+2. 공정 관리 페이지에서 해당 라인에 공정 추가
+3. PLC 관리 페이지에서 PLC 연결 정보 입력 및 테스트
+4. 태그 관리 페이지에서 CSV로 태그 일괄 업로드
+5. 폴링 그룹 생성 후 태그 선택 및 폴링 주기 설정
+6. 폴링 그룹 시작
 
-## 문제 해결
-
-### 백엔드 연결 실패
-
-**증상**: "Failed to fetch status" 에러
-
-**해결**:
-1. 백엔드 서버가 실행 중인지 확인: http://localhost:8000/health
-2. `.env.local`의 `NEXT_PUBLIC_API_URL` 확인
-3. CORS 설정 확인 (백엔드 `main.py`)
-
-### WebSocket 연결 실패
-
-**증상**: "Disconnected" 상태 유지
-
-**해결**:
-1. 백엔드 WebSocket 엔드포인트 확인: ws://localhost:8000/ws/polling
-2. `.env.local`의 `NEXT_PUBLIC_WS_URL` 확인
-3. 방화벽/프록시 설정 확인
-
-### 자동 새로고침이 작동하지 않음
-
-**증상**: 데이터가 업데이트되지 않음
-
-**해결**:
-1. 브라우저 콘솔에서 에러 확인
-2. 네트워크 탭에서 API 요청 확인
-3. 페이지 새로고침 시도
-
-## 개발
-
-### 코드 스타일
-
-```bash
-# Lint 실행
-npm run lint
-
-# Lint 자동 수정
-npm run lint -- --fix
-```
-
-### 타입 체크
-
-```bash
-# TypeScript 컴파일 확인
-npx tsc --noEmit
-```
-
-### 새로운 페이지 추가
-
-1. `app/` 디렉토리에 새 폴더 생성
-2. `page.tsx` 파일 작성
-3. 필요시 `components/` 하위 디렉토리 생성
+### 2. 시스템 모니터링
+1. 대시보드 페이지에서 실시간 시스템 상태 확인
+2. CPU/메모리/디스크 사용률 모니터링
+3. PLC 연결 상태 확인
+4. 로그 조회 페이지에서 오류 로그 분석
 
 ## 라이선스
 
-Proprietary - 내부 사용 전용
-
-## 문의
-
-프로젝트 관련 문의: JSScada Development Team
+MIT
