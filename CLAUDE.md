@@ -212,3 +212,16 @@ During implementation, automatically create/verify ignore files based on detecte
 
 ## Recent Changes
 - 001-project-structure-sqlite-setup: Added SQLite 파일 기반 데이터베이스 (backend/config/scada.db)
+
+
+## IMPORTANT: Oracle Database Library
+⚠️ **ALWAYS USE python-oracledb, NOT cx_Oracle**
+- Package: python-oracledb>=2.0.0
+- Import: import oracledb
+- Reason: Modern Python-only driver, no Oracle Client needed
+- Documentation: https://python-oracledb.readthedocs.io/
+
+Example:
+import oracledb
+connection = oracledb.connect(user='scott', password='tiger', dsn='localhost/orclpdb')
+
