@@ -36,7 +36,6 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 - 자동 에러 복구 및 스레드 격리
 - **REST API**: FastAPI 기반 8개 엔드포인트
 - **WebSocket**: 실시간 상태 업데이트 (1초 간격)
-- **관리 UI**: Next.js 폴링 제어 대시보드
 
 ### Feature 4: 메모리 버퍼 및 Oracle DB Writer ✅
 - **Thread-Safe Circular Buffer**: 10,000 엔트리 FIFO 큐
@@ -67,31 +66,111 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 
 ### 향후 기능
 
-#### Feature 7: 실시간 데이터 조회 및 히스토리 API
-- 현재 태그 값 조회 API (Oracle DB 연동)
-- 시계열 히스토리 데이터 조회
-- 집계 데이터 (평균/최대/최소)
-- 태그 검색 및 필터링
-- 페이징 및 성능 최적화
+#### Feature 7: Monitor 웹 UI (실시간 모니터링)
+- 실시간 태그 값 모니터링 (WebSocket 기반)
+- 라인별/공정별/폴링그룹별 필터링
+- 태그 상태 카드 (현재 값, 최종 업데이트 시간)
+- 대시보드 레이아웃 (그리드/테이블 뷰)
+- 알람/경고 표시 (임계값 기반)
+- 자동 새로고침 및 연결 상태 표시
 
-#### Feature 8: Monitor 웹 UI (실시간 모니터링)
-- 실시간 태그 값 모니터링 (WebSocket)
-- 라인별/공정별 필터링
-- 트렌드 차트 (시계열 그래프)
-- 태그 값 히스토리 조회
-- 대시보드 레이아웃 (카드/테이블/차트)
+> **참고**: Oracle DB에 저장된 **히스토리 데이터 조회 및 분석**은 **별도 시스템**에서 수행하므로, 이 프로젝트 범위에 포함되지 않습니다.
 
-#### Feature 9: 통합 테스트 및 배포 준비
+#### Feature 8: 통합 테스트 및 배포 준비
 - End-to-End 테스트
 - 성능 및 부하 테스트
 - Docker 컨테이너화
 - 배포 문서 및 운영 가이드
+
+## 시스템 범위 명확화
+
+### ✅ 포함 (이 프로젝트)
+1. **데이터 수집**: PLC에서 태그 값 폴링
+2. **데이터 저장**: Oracle DB에 실시간 저장
+3. **시스템 관리**: 라인/공정/PLC/태그/폴링그룹 CRUD
+4. **실시간 모니터링**: WebSocket 기반 현재 값 표시
+
+### ❌ 제외 (별도 시스템)
+1. **히스토리 조회**: Oracle DB에서 과거 데이터 조회
+2. **시계열 분석**: 집계 데이터 (평균/최대/최소)
+3. **트렌드 차트**: 시간별 그래프
+4. **리포트 생성**: 통계 및 분석 리포트
+
+## 빠른 시작
+
+### 1. 전체 설치 (모노레포)
+
+```bash
+# 루트에서 모든 워크스페이스 설치
+npm install
+```
+
+### 2. Backend 설정
+
+```bash
+cd backend
+
+# 가상 환경 생성 및 활성화
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
+
+# 의존성 설치
+pip install -r requirements.txt
+
+# 환경 변수 설정
+cp .env.example .env
+
+# 데이터베이스 초기화
+python src/scripts/init_database.py
+
+# 샘플 데이터 생성 (선택사항)
+python src/scripts/create_sample_data.py
+
+# FastAPI 서버 실행
+python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### 3. Frontend 개발 서버 실행
+
+```bash
+# 루트에서 실행
+
+# Admin 웹 (http://localhost:3000)
+npm run dev:admin
+
+# Monitor 웹 (http://localhost:3001)
+npm run dev:monitor
+
+# 둘 다 실행
+npm run dev
+```
+
+### 4. 접속 URL
+
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+- **WebSocket**: ws://localhost:8000/ws/polling
+- **Admin Web**: http://localhost:3000
+- **Monitor Web**: http://localhost:3001
+
+## 프로젝트 구조 (모노레포)
+
+```
+JSOPCUA/
+├── apps/                 # 애플리케이션
+│   ├── admin/           # Next.js 관리 웹
+│   └── monitor/         # Next.js 모니터링 웹
+├── backend/            # Python 백엔드
+│   ├── config/         # SQLite DB 및 설정
 │   ├── logs/           # 로그 파일
 │   ├── src/
 │   │   ├── database/   # DB 모델 및 관리
-│   │   ├── plc/        # PLC 통신 (Feature 2)
-│   │   ├── polling/    # 폴링 엔진 (Feature 3)
-│   │   ├── api/        # REST API & WebSocket (Feature 3)
+│   │   ├── plc/        # PLC 통신
+│   │   ├── polling/    # 폴링 엔진
+│   │   ├── buffer/     # 메모리 버퍼
+│   │   ├── oracle_writer/ # Oracle DB Writer
+│   │   ├── api/        # REST API & WebSocket
 │   │   └── scripts/    # 유틸리티 스크립트
 │   └── tests/          # 테스트
 ├── docs/               # 프로젝트 문서
@@ -119,48 +198,6 @@ lines (라인)
                  └─> polling_groups (폴링 그룹) [SET NULL]
 ```
 
-## 설비 코드 체계
-
-14자리 형식: `KRCWO12ELOA101`
-- KR: 국가 코드
-- CWO: 공장 코드
-- 12: 라인 번호
-- ELO: 설비 유형
-- A: 카테고리
-- 101: 순번
-
-## CSV 태그 등록
-
-```bash
-cd backend
-python src/scripts/import_tags_csv.py path/to/tags.csv
-```
-
-CSV 형식:
-```csv
-PLC_CODE,TAG_ADDRESS,TAG_NAME,UNIT,SCALE,MACHINE_CODE
-PLC01,D100,온도센서1,°C,1.0,KRCWO12ELOA101
-```
-
-## 개발 가이드
-
-### 브랜치 전략
-
-- `main`: 안정 버전
-- `001-project-structure-sqlite-setup`: Feature 1
-- `002-mc3e-protocol-connection-pool`: Feature 2 (예정)
-- ...
-
-### SpecKit 워크플로우
-
-이 프로젝트는 SpecKit 워크플로우를 사용합니다:
-1. `/speckit.specify` - 기능 명세 작성
-2. `/speckit.plan` - 구현 계획 수립
-3. `/speckit.tasks` - 작업 분해
-4. `/speckit.implement` - 구현 실행
-
-자세한 내용은 `CLAUDE.md` 참조.
-
 ## 기술 스택
 
 ### Backend
@@ -171,13 +208,14 @@ PLC01,D100,온도센서1,°C,1.0,KRCWO12ELOA101
 - uvicorn (ASGI 서버)
 - websockets (WebSocket 서버)
 - pydantic (데이터 검증)
-- cx_Oracle (Oracle DB 연동, 향후)
+- cx_Oracle (Oracle DB 연동)
 
 ### Frontend
 - Next.js 14+ (App Router)
 - React 18+
 - TypeScript 5.3+
 - Tailwind CSS
+- shadcn/ui
 
 ## 라이선스
 
