@@ -106,3 +106,83 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+
+
+# ==============================================================================
+# Feature 5: Database Management API - Exception Handlers
+# ==============================================================================
+
+from fastapi.exceptions import RequestValidationError
+import sqlite3
+from . import exceptions as custom_exceptions
+
+# Register exception handlers
+app.add_exception_handler(
+    RequestValidationError,
+    custom_exceptions.validation_exception_handler
+)
+
+app.add_exception_handler(
+    sqlite3.Error,
+    custom_exceptions.sqlite_exception_handler
+)
+
+app.add_exception_handler(
+    custom_exceptions.ResourceNotFoundError,
+    custom_exceptions.resource_not_found_handler
+)
+
+app.add_exception_handler(
+    custom_exceptions.DuplicateResourceError,
+    custom_exceptions.duplicate_resource_handler
+)
+
+app.add_exception_handler(
+    custom_exceptions.ForeignKeyError,
+    custom_exceptions.foreign_key_handler
+)
+
+app.add_exception_handler(
+    custom_exceptions.ValidationError,
+    custom_exceptions.validation_error_handler
+)
+
+# Routers will be added here as they are implemented (T020, T027, T039, T055, T068)
+# Example:
+# from .lines_routes import router as lines_router
+# app.include_router(lines_router, prefix="/api", tags=["lines"])
+
+# ==============================================================================
+# Feature 5: Database Management API - Lines Router
+# ==============================================================================
+
+from .lines_routes import router as lines_router
+app.include_router(lines_router, tags=["lines"])
+
+# ==============================================================================
+# Feature 5: Database Management API - Processes Router
+# ==============================================================================
+
+from .processes_routes import router as processes_router
+app.include_router(processes_router, tags=["processes"])
+
+# ==============================================================================
+# Feature 5: Database Management API - PLC Connections Router
+# ==============================================================================
+
+from .plc_connections_routes import router as plc_connections_router
+app.include_router(plc_connections_router, tags=["plc-connections"])
+
+# ==============================================================================
+# Feature 5: Database Management API - Tags Router
+# ==============================================================================
+
+from .tags_routes import router as tags_router
+app.include_router(tags_router, tags=["tags"])
+
+# ==============================================================================
+# Feature 5: Database Management API - Polling Groups Router
+# ==============================================================================
+
+from .polling_groups_routes import router as polling_groups_router
+app.include_router(polling_groups_router, tags=["polling-groups"])

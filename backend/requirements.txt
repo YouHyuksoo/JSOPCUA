@@ -22,3 +22,7 @@ python-oracledb>=2.0.0
 
 # Development
 python-dotenv>=1.0.0
+
+# Data Processing (Feature 5 - CSV import)
+python-multipart>=0.0.6  # For file uploads
+pandas>=2.1.0  # For CSV parsing
