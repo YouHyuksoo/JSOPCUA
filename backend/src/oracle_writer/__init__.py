@@ -7,16 +7,19 @@ Oracle Database writer with connection pooling, batch writes, and CSV backup.
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from src.config.paths import get_logs_dir
 
 
-def setup_logging(log_dir="backend/logs", log_level=logging.INFO):
+def setup_logging(log_dir=None, log_level=logging.INFO):
     """
     Configure logging for oracle_writer package
-    
+
     Args:
         log_dir: Directory for log files
         log_level: Logging level (default: INFO)
     """
+    if log_dir is None:
+        log_dir = get_logs_dir()
     os.makedirs(log_dir, exist_ok=True)
     log_file = os.path.join(log_dir, "oracle_writer.log")
     

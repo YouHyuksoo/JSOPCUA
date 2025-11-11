@@ -7,6 +7,7 @@ Load Oracle connection parameters from environment variables with validation.
 import os
 from typing import Optional
 from dataclasses import dataclass
+from src.config.paths import get_backup_dir
 
 
 @dataclass
@@ -209,7 +210,7 @@ def load_buffer_config_from_env() -> dict:
     except ValueError:
         buffer_retry_count = 3
 
-    backup_file_path = os.getenv('BACKUP_FILE_PATH', 'backend/backup')
+    backup_file_path = os.getenv('BACKUP_FILE_PATH', get_backup_dir())
 
     return {
         'buffer_max_size': buffer_max_size,

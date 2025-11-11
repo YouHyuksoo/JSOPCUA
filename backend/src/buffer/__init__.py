@@ -7,9 +7,12 @@ Thread-safe circular buffer for consuming polling data and preparing for Oracle 
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+from src.config.paths import get_logs_dir
 
 
-def setup_logging(log_dir="backend/logs", log_level=logging.INFO):
+def setup_logging(log_dir=None, log_level=logging.INFO):
+    if log_dir is None:
+        log_dir = get_logs_dir()
     """
     Configure logging for buffer package
     

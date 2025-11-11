@@ -10,7 +10,7 @@ import asyncio
 import json
 from datetime import datetime
 
-from polling.polling_engine import PollingEngine
+from src.polling.polling_engine import PollingEngine
 
 
 class ConnectionManager:

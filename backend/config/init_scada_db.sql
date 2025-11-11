@@ -6,13 +6,13 @@
 PRAGMA foreign_keys = ON;
 
 -- =============================================================================
--- Table: lines (생산 라인)
+-- Table: machines (생산 설비)
 -- =============================================================================
-CREATE TABLE IF NOT EXISTS lines (
+CREATE TABLE IF NOT EXISTS machines (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    line_code VARCHAR(10) NOT NULL UNIQUE,
-    line_name VARCHAR(100) NOT NULL,
-    description TEXT,
+    machine_code VARCHAR(50) NOT NULL UNIQUE,
+    machine_name VARCHAR(200) NOT NULL,
+    location TEXT,
     is_active BOOLEAN NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS lines (
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS processes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    line_id INTEGER NOT NULL,
+    machine_id INTEGER NOT NULL,
     process_code VARCHAR(14) NOT NULL UNIQUE,
     process_name VARCHAR(100) NOT NULL,
     description TEXT,
@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS processes (
     is_active BOOLEAN NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (line_id) REFERENCES lines(id) ON DELETE CASCADE
+    FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE
 );
 
 -- =============================================================================
@@ -101,8 +101,8 @@ CREATE TABLE IF NOT EXISTS tags (
 -- Indexes (성능 최적화)
 -- =============================================================================
 
--- Index 1: processes - line_id 기반 조회
-CREATE INDEX IF NOT EXISTS idx_processes_line_id ON processes(line_id);
+-- Index 1: processes - machine_id 기반 조회
+CREATE INDEX IF NOT EXISTS idx_processes_machine_id ON processes(machine_id);
 
 -- Index 2: processes - process_code 기반 조회
 CREATE INDEX IF NOT EXISTS idx_processes_code ON processes(process_code);
@@ -150,9 +150,9 @@ SELECT
     p.id AS process_id,
     p.process_code,
     p.process_name,
-    l.id AS line_id,
-    l.line_code,
-    l.line_name,
+    m.id AS machine_id,
+    m.machine_code,
+    m.machine_name,
     pg.id AS polling_group_id,
     pg.group_name,
     pg.polling_mode,
@@ -160,7 +160,7 @@ SELECT
 FROM tags t
 INNER JOIN plc_connections plc ON t.plc_id = plc.id
 INNER JOIN processes p ON plc.process_id = p.id
-INNER JOIN lines l ON p.line_id = l.id
+INNER JOIN machines m ON p.machine_id = m.id
 LEFT JOIN polling_groups pg ON t.polling_group_id = pg.id;
 
 -- =============================================================================

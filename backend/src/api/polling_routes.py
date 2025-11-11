@@ -9,8 +9,8 @@ from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
-from polling.polling_engine import PollingEngine
-from polling.exceptions import (
+from src.polling.polling_engine import PollingEngine
+from src.polling.exceptions import (
     PollingGroupNotFoundError,
     PollingGroupAlreadyRunningError,
     PollingGroupNotRunningError,

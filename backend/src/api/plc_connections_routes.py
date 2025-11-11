@@ -7,16 +7,16 @@ Provides CRUD operations for PLC connections with connectivity testing
 
 from typing import List
 from fastapi import APIRouter, Depends, status
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 from .models import PLCConnectionCreate, PLCConnectionUpdate, PLCConnectionResponse, PLCTestResult, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
-from database.validators import (
+from src.database.validators import (
     validate_process_exists,
     validate_plc_code_unique,
     validate_ipv4_address
 )
-from plc.mc3e_client import MC3EClient
+from src.plc.mc3e_client import MC3EClient
 import time
 
 router = APIRouter(prefix="/api/plc-connections", tags=["plc-connections"])
@@ -54,18 +54,19 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO plc_connections (
-                process_id, plc_code, ip_address, port,
-                network_no, station_no, enabled
+                process_id, plc_code, plc_name, ip_address, port,
+                protocol, connection_timeout, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             plc.process_id,
             plc.plc_code,
+            plc.plc_code,  # plc_name (use plc_code as default)
             plc.ip_address,
             plc.port,
-            plc.network_no,
-            plc.station_no,
-            plc.enabled
+            'MC-3E',  # protocol (default)
+            5000,  # connection_timeout (default 5000ms)
+            plc.enabled  # is_active
         ))
         conn.commit()
         plc_id = cursor.lastrowid
@@ -79,17 +80,19 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
         cursor.execute("SELECT * FROM plc_connections WHERE id = ?", (plc_id,))
         row = cursor.fetchone()
 
+    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    from datetime import datetime
     return PLCConnectionResponse(
         id=row[0],
         process_id=row[1],
         plc_code=row[2],
-        ip_address=row[3],
-        port=row[4],
-        network_no=row[5],
-        station_no=row[6],
-        enabled=bool(row[7]),
-        created_at=row[8],
-        updated_at=row[9]
+        ip_address=row[4],
+        port=row[5],
+        network_no=0,  # Default value (not in DB)
+        station_no=0,  # Default value (not in DB)
+        enabled=bool(row[8]),  # is_active
+        created_at=row[10] if row[10] else datetime.now().isoformat(),
+        updated_at=row[11] if row[11] else datetime.now().isoformat()
     )
 
 
@@ -134,18 +137,20 @@ def list_plc_connections(
         """, params_list)
         rows = cursor.fetchall()
 
+    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    from datetime import datetime
     plcs = [
         PLCConnectionResponse(
             id=row[0],
             process_id=row[1],
             plc_code=row[2],
-            ip_address=row[3],
-            port=row[4],
-            network_no=row[5],
-            station_no=row[6],
-            enabled=bool(row[7]),
-            created_at=row[8],
-            updated_at=row[9]
+            ip_address=row[4],
+            port=row[5],
+            network_no=0,  # Default value (not in DB)
+            station_no=0,  # Default value (not in DB)
+            enabled=bool(row[8]),  # is_active
+            created_at=row[10] if row[10] else datetime.now().isoformat(),
+            updated_at=row[11] if row[11] else datetime.now().isoformat()
         )
         for row in rows
     ]
@@ -179,17 +184,19 @@ def get_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("PLC Connection", plc_id)
 
+    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    from datetime import datetime
     return PLCConnectionResponse(
         id=row[0],
         process_id=row[1],
         plc_code=row[2],
-        ip_address=row[3],
-        port=row[4],
-        network_no=row[5],
-        station_no=row[6],
-        enabled=bool(row[7]),
-        created_at=row[8],
-        updated_at=row[9]
+        ip_address=row[4],
+        port=row[5],
+        network_no=0,  # Default value (not in DB)
+        station_no=0,  # Default value (not in DB)
+        enabled=bool(row[8]),  # is_active
+        created_at=row[10] if row[10] else datetime.now().isoformat(),
+        updated_at=row[11] if row[11] else datetime.now().isoformat()
     )
 
 
@@ -218,10 +225,11 @@ def test_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
         raise_not_found("PLC Connection", plc_id)
 
     # Extract connection params
-    ip_address = row[3]
-    port = row[4]
-    network_no = row[5]
-    station_no = row[6]
+    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    ip_address = row[4]
+    port = row[5]
+    network_no = 0  # Default value (not in DB)
+    station_no = 0  # Default value (not in DB)
 
     # Test connection using MC3EClient
     client = None
@@ -317,16 +325,10 @@ def update_plc_connection(
         updates.append("port = ?")
         params.append(plc_update.port)
 
-    if plc_update.network_no is not None:
-        updates.append("network_no = ?")
-        params.append(plc_update.network_no)
-
-    if plc_update.station_no is not None:
-        updates.append("station_no = ?")
-        params.append(plc_update.station_no)
+    # network_no and station_no are not stored in DB (ignored)
 
     if plc_update.enabled is not None:
-        updates.append("enabled = ?")
+        updates.append("is_active = ?")
         params.append(plc_update.enabled)
 
     if not updates:

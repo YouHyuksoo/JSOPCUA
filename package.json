@@ -17,6 +17,7 @@
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "devDependencies": {
+    "lightningcss": "^1.30.2",
     "typescript": "^5.3.0"
   }
 }

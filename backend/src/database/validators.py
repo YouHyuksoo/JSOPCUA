@@ -8,8 +8,8 @@ Provides business logic validation for database operations
 import re
 import ipaddress
 from typing import Optional
-from database.sqlite_manager import SQLiteManager
-from api.exceptions import ForeignKeyError, ValidationError
+from src.database.sqlite_manager import SQLiteManager
+from src.api.exceptions import ForeignKeyError, ValidationError
 
 
 # ==============================================================================
@@ -85,27 +85,27 @@ def validate_ipv4_address(ip: str) -> bool:
 # Foreign Key Validation
 # ==============================================================================
 
-def validate_line_exists(db: SQLiteManager, line_id: int) -> bool:
+def validate_machine_exists(db: SQLiteManager, machine_id: int) -> bool:
     """
-    Validate that line exists
+    Validate that machine exists
 
     Args:
         db: Database manager
-        line_id: Line ID to check
+        machine_id: Machine ID to check
 
     Returns:
         True if exists
 
     Raises:
-        ForeignKeyError: If line not found
+        ForeignKeyError: If machine not found
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM lines WHERE id = ?", (line_id,))
+        cursor.execute("SELECT id FROM machines WHERE id = ?", (machine_id,))
         if not cursor.fetchone():
             raise ForeignKeyError(
-                message="Line not found",
-                detail=f"line_id {line_id} not found"
+                message="Machine not found",
+                detail=f"machine_id {machine_id} not found"
             )
     return True
 
@@ -189,35 +189,35 @@ def validate_polling_group_exists(db: SQLiteManager, group_id: int) -> bool:
 # Unique Constraint Validation
 # ==============================================================================
 
-def validate_line_code_unique(db: SQLiteManager, line_code: str, exclude_id: Optional[int] = None) -> bool:
+def validate_machine_code_unique(db: SQLiteManager, machine_code: str, exclude_id: Optional[int] = None) -> bool:
     """
-    Validate that line_code is unique
+    Validate that machine_code is unique
 
     Args:
         db: Database manager
-        line_code: Line code to check
+        machine_code: Machine code to check
         exclude_id: Optional ID to exclude (for updates)
 
     Returns:
         True if unique
 
     Raises:
-        ValidationError: If line_code already exists
+        ValidationError: If machine_code already exists
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
         if exclude_id:
             cursor.execute(
-                "SELECT id FROM lines WHERE line_code = ? AND id != ?",
-                (line_code, exclude_id)
+                "SELECT id FROM machines WHERE machine_code = ? AND id != ?",
+                (machine_code, exclude_id)
             )
         else:
-            cursor.execute("SELECT id FROM lines WHERE line_code = ?", (line_code,))
+            cursor.execute("SELECT id FROM machines WHERE machine_code = ?", (machine_code,))
 
         if cursor.fetchone():
             raise ValidationError(
-                message="Duplicate line code",
-                detail=f"line_code '{line_code}' already exists"
+                message="Duplicate machine code",
+                detail=f"machine_code '{machine_code}' already exists"
             )
     return True
 

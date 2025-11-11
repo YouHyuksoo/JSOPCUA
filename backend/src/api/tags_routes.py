@@ -7,17 +7,18 @@ Provides CRUD operations for PLC tags including CSV bulk import
 
 from typing import List
 from fastapi import APIRouter, Depends, status, UploadFile, File
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 from .models import TagCreate, TagUpdate, TagResponse, TagImportResult, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
-from database.validators import (
+from src.database.validators import (
     validate_plc_exists,
     validate_process_exists,
     validate_polling_group_exists
 )
 import pandas as pd
 import io
+from datetime import datetime
 
 router = APIRouter(prefix="/api/tags", tags=["tags"])
 
@@ -55,22 +56,21 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO tags (
-                plc_id, process_id, tag_address, tag_name, tag_division,
-                data_type, unit, scale, machine_code, polling_group_id, enabled
+                plc_id, polling_group_id, tag_address, tag_name, tag_type,
+                unit, scale, machine_code, description, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             tag.plc_id,
-            tag.process_id,
+            tag.polling_group_id,
             tag.tag_address,
             tag.tag_name,
-            tag.tag_division,
-            tag.data_type,
+            tag.data_type,  # tag_type
             tag.unit,
             tag.scale,
             tag.machine_code,
-            tag.polling_group_id,
-            tag.enabled
+            tag.tag_division,  # description
+            tag.enabled  # is_active
         ))
         conn.commit()
         tag_id = cursor.lastrowid
@@ -216,11 +216,11 @@ def update_tag(
         params.append(tag_update.tag_name)
 
     if tag_update.tag_division is not None:
-        updates.append("tag_division = ?")
+        updates.append("description = ?")
         params.append(tag_update.tag_division)
 
     if tag_update.data_type is not None:
-        updates.append("data_type = ?")
+        updates.append("tag_type = ?")
         params.append(tag_update.data_type)
 
     if tag_update.unit is not None:
@@ -236,7 +236,7 @@ def update_tag(
         params.append(tag_update.polling_group_id)
 
     if tag_update.enabled is not None:
-        updates.append("enabled = ?")
+        updates.append("is_active = ?")
         params.append(tag_update.enabled)
 
     if not updates:
@@ -414,8 +414,8 @@ async def import_tags_csv(
                     enabled = int(row.get('ENABLED', 1))
 
                     batch_data.append((
-                        plc_id, process_id, tag_address, tag_name, tag_division,
-                        data_type, unit, scale, machine_code, None, enabled
+                        plc_id, None, tag_address, tag_name, data_type,
+                        unit, scale, machine_code, tag_division, enabled
                     ))
 
                 except Exception as e:
@@ -429,10 +429,10 @@ async def import_tags_csv(
                         cursor = conn.cursor()
                         cursor.executemany("""
                             INSERT INTO tags (
-                                plc_id, process_id, tag_address, tag_name, tag_division,
-                                data_type, unit, scale, machine_code, polling_group_id, enabled
+                                plc_id, polling_group_id, tag_address, tag_name, tag_type,
+                                unit, scale, machine_code, description, is_active
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, batch_data)
                         conn.commit()
                         success_count += len(batch_data)
@@ -446,10 +446,10 @@ async def import_tags_csv(
                                 cursor = conn.cursor()
                                 cursor.execute("""
                                     INSERT INTO tags (
-                                        plc_id, process_id, tag_address, tag_name, tag_division,
-                                        data_type, unit, scale, machine_code, polling_group_id, enabled
+                                        plc_id, polling_group_id, tag_address, tag_name, tag_type,
+                                        unit, scale, machine_code, description, is_active
                                     )
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """, data)
                                 conn.commit()
                                 success_count += 1
@@ -480,21 +480,22 @@ async def import_tags_csv(
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse"""
+    # Row format: (id, plc_id, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
     return TagResponse(
         id=row[0],
         plc_id=row[1],
-        process_id=row[2],
+        process_id=0,  # Not in DB - use default
         tag_address=row[3],
         tag_name=row[4],
-        tag_division=row[5],
-        data_type=row[6],
-        unit=row[7],
-        scale=row[8],
-        machine_code=row[9],
-        polling_group_id=row[10],
-        enabled=bool(row[11]),
-        created_at=row[12],
-        updated_at=row[13]
+        tag_division=row[12] if row[12] else '',  # description
+        data_type=row[5],  # tag_type
+        unit=str(row[6]) if row[6] else None,  # Convert to string if not None
+        scale=float(row[7]) if row[7] is not None else 1.0,
+        machine_code=row[11],
+        polling_group_id=row[2],
+        enabled=bool(row[13]),  # is_active
+        created_at=row[16] if row[16] else datetime.now().isoformat(),
+        updated_at=row[17] if row[17] else datetime.now().isoformat()
     )
 
 

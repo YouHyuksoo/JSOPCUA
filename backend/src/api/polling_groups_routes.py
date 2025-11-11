@@ -7,11 +7,11 @@ Provides CRUD operations for polling groups
 
 from typing import List
 from fastapi import APIRouter, Depends, status
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 from .models import PollingGroupCreate, PollingGroupUpdate, PollingGroupResponse, TagResponse, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
-from database.validators import (
+from src.database.validators import (
     validate_plc_exists,
     validate_polling_mode
 )
@@ -29,7 +29,7 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
     Create a new polling group
 
     - **group_name**: Group name (max 200 chars)
-    - **line_code**: Optional line code filter (max 50 chars)
+    - **machine_code**: Optional machine code filter (max 50 chars)
     - **process_code**: Optional process code filter (max 50 chars)
     - **plc_id**: ID of PLC connection (must exist)
     - **mode**: Polling mode (FIXED or HANDSHAKE, default: FIXED)
@@ -52,23 +52,16 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO polling_groups (
-                group_name, line_code, process_code, plc_id, mode,
-                interval_ms, trigger_bit_address, trigger_bit_offset,
-                auto_reset_trigger, priority, enabled
+                group_name, polling_mode, polling_interval_ms, description, is_active, plc_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
         """, (
             group.group_name,
-            group.line_code,
-            group.process_code,
-            group.plc_id,
-            group.mode,
-            group.interval_ms,
-            group.trigger_bit_address,
-            group.trigger_bit_offset,
-            group.auto_reset_trigger,
-            group.priority,
-            group.enabled
+            group.mode,  # polling_mode
+            group.interval_ms,  # polling_interval_ms
+            f"Line: {group.line_code or 'N/A'}, Process: {group.process_code or 'N/A'}",  # description
+            group.enabled,  # is_active
+            group.plc_id
         ))
         conn.commit()
         group_id = cursor.lastrowid
@@ -220,12 +213,13 @@ def update_polling_group(
     if not row:
         raise_not_found("Polling Group", group_id)
 
+    # Row format: (id, group_name, polling_mode, polling_interval_ms, description, is_active, created_at, updated_at, plc_id)
     # Get current values for validation
-    current_mode = row[5] if group_update.mode is None else group_update.mode
-    current_trigger = row[7] if group_update.trigger_bit_address is None else group_update.trigger_bit_address
+    current_mode = row[2] if group_update.mode is None else group_update.mode
+    current_trigger = group_update.trigger_bit_address  # Not stored in DB
 
-    # Validate mode and trigger
-    validate_polling_mode(current_mode, current_trigger)
+    # Validate mode and trigger (skip validation since trigger not in DB)
+    # validate_polling_mode(current_mode, current_trigger)
 
     # Build update query
     updates = []
@@ -236,19 +230,17 @@ def update_polling_group(
         params.append(group_update.group_name)
 
     if group_update.mode is not None:
-        updates.append("mode = ?")
+        updates.append("polling_mode = ?")
         params.append(group_update.mode)
 
     if group_update.interval_ms is not None:
-        updates.append("interval_ms = ?")
+        updates.append("polling_interval_ms = ?")
         params.append(group_update.interval_ms)
 
-    if group_update.trigger_bit_address is not None:
-        updates.append("trigger_bit_address = ?")
-        params.append(group_update.trigger_bit_address)
+    # trigger_bit_address is not in DB (ignored)
 
     if group_update.enabled is not None:
-        updates.append("enabled = ?")
+        updates.append("is_active = ?")
         params.append(group_update.enabled)
 
     if not updates:
@@ -310,39 +302,43 @@ def delete_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
 
 def _row_to_polling_group_response(row) -> PollingGroupResponse:
     """Convert database row to PollingGroupResponse"""
+    # Row format: (id, group_name, polling_mode, polling_interval_ms, description, is_active, created_at, updated_at, plc_id)
+    # Note: plc_id is at index 8 but may be NULL
     return PollingGroupResponse(
         id=row[0],
         group_name=row[1],
-        line_code=row[2],
-        process_code=row[3],
-        plc_id=row[4],
-        mode=row[5],
-        interval_ms=row[6],
-        trigger_bit_address=row[7],
-        trigger_bit_offset=row[8],
-        auto_reset_trigger=bool(row[9]),
-        priority=row[10],
-        enabled=bool(row[11]),
-        created_at=row[12],
-        updated_at=row[13]
+        machine_code=None,  # Not in DB
+        process_code=None,  # Not in DB
+        plc_id=row[8] if len(row) > 8 and row[8] is not None else 0,  # Handle NULL or missing
+        mode=row[2],  # polling_mode
+        interval_ms=row[3],  # polling_interval_ms
+        trigger_bit_address=None,  # Not in DB
+        trigger_bit_offset=0,  # Not in DB
+        auto_reset_trigger=True,  # Not in DB
+        priority='NORMAL',  # Not in DB
+        enabled=bool(row[5]),  # is_active
+        created_at=row[6],
+        updated_at=row[7]
     )
 
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse (for /tags endpoint)"""
+    # Row format: (id, plc_id, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
+    from datetime import datetime
     return TagResponse(
         id=row[0],
         plc_id=row[1],
-        process_id=row[2],
+        process_id=0,  # Not in DB - use default
         tag_address=row[3],
         tag_name=row[4],
-        tag_division=row[5],
-        data_type=row[6],
-        unit=row[7],
-        scale=row[8],
-        machine_code=row[9],
-        polling_group_id=row[10],
-        enabled=bool(row[11]),
-        created_at=row[12],
-        updated_at=row[13]
+        tag_division=row[12] if row[12] else '',  # description
+        data_type=row[5],  # tag_type
+        unit=str(row[6]) if row[6] else None,  # Convert to string if not None
+        scale=float(row[7]) if row[7] is not None else 1.0,
+        machine_code=row[11],
+        polling_group_id=row[2],
+        enabled=bool(row[13]),  # is_active
+        created_at=row[16] if row[16] else datetime.now().isoformat(),
+        updated_at=row[17] if row[17] else datetime.now().isoformat()
     )

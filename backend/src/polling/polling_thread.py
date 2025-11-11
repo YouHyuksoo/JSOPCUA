@@ -13,8 +13,10 @@ from typing import Optional, Dict, Any
 from .models import PollingGroup, PollingData, ThreadState, PollingMode
 from .data_queue import DataQueue
 from .exceptions import PollingThreadError
+from .polling_logger import get_failure_logger
 
 logger = logging.getLogger(__name__)
+failure_logger = get_failure_logger()
 
 
 class PollingThread(ABC):
@@ -199,10 +201,43 @@ class PollingThread(ABC):
             self.total_polls += 1
             self.error_count += 1
 
+            # Log to console
             logger.error(
                 f"Poll failed: group={self.group.group_name}, "
                 f"error={str(e)}, time={poll_time_ms:.2f}ms"
             )
+
+            # Log failure to daily folder with detailed information
+            error_type = type(e).__name__
+            error_message = str(e)
+
+            # Determine specific error type
+            if "connection" in error_message.lower() or "connect" in error_message.lower():
+                failure_logger.log_connection_failure(
+                    plc_code=self.group.plc_code,
+                    group_name=self.group.group_name,
+                    ip_address="unknown",  # PoolManager should provide this
+                    port=5010,  # Default port
+                    error_message=error_message,
+                    connection_timeout=5
+                )
+            elif "timeout" in error_message.lower():
+                failure_logger.log_timeout_failure(
+                    plc_code=self.group.plc_code,
+                    group_name=self.group.group_name,
+                    tag_addresses=self.group.tag_addresses,
+                    timeout_ms=poll_time_ms
+                )
+            else:
+                failure_logger.log_read_failure(
+                    plc_code=self.group.plc_code,
+                    group_name=self.group.group_name,
+                    tag_addresses=self.group.tag_addresses,
+                    error_message=error_message,
+                    poll_duration_ms=poll_time_ms,
+                    response_code=None
+                )
+
             return False
 
     def _update_avg_poll_time(self, poll_time_ms: float):

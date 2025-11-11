@@ -8,11 +8,12 @@ Supports FIXED mode (automatic polling) and HANDSHAKE mode (manual trigger).
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+from src.config.paths import get_logs_dir
 
 # Configure logging for polling module
 logger = logging.getLogger(__name__)
 
-def setup_logging(log_dir="backend/logs", log_level=logging.INFO):
+def setup_logging(log_dir=None, log_level=logging.INFO):
     """
     Setup logging configuration for polling module
 
@@ -20,6 +21,8 @@ def setup_logging(log_dir="backend/logs", log_level=logging.INFO):
         log_dir: Directory for log files
         log_level: Logging level (default: INFO)
     """
+    if log_dir is None:
+        log_dir = get_logs_dir()
     os.makedirs(log_dir, exist_ok=True)
 
     # Create rotating file handler

@@ -26,7 +26,14 @@ def init_database():
 
     # 데이터베이스 경로
     db_path = project_root / "config" / "scada.db"
-    sql_script_path = project_root / "config" / "init_scada_db.sql"
+
+    # V2 스키마 사용 (machines 테이블 제거, alarm_masters 추가)
+    sql_script_path = project_root / "config" / "init_scada_db_v2.sql"
+
+    # V2 스키마가 없으면 기존 스키마 사용
+    if not sql_script_path.exists():
+        sql_script_path = project_root / "config" / "init_scada_db.sql"
+        logger.warning("V2 schema not found, using V1 schema")
 
     logger.info(f"Database path: {db_path}")
     logger.info(f"SQL script path: {sql_script_path}")
@@ -48,9 +55,20 @@ def init_database():
     # 데이터베이스가 이미 존재하는지 확인
     if manager.database_exists():
         logger.warning(f"Database already exists: {db_path}")
-        response = input("Do you want to recreate the database? (yes/no): ")
+
+        # 테이블 목록 확인
+        try:
+            table_names = manager.get_table_names()
+            if table_names:
+                logger.info(f"Existing tables: {', '.join(table_names)}")
+        except:
+            pass
+
+        response = input("Do you want to recreate the database? This will DELETE all existing data! (yes/no): ")
         if response.lower() != 'yes':
             logger.info("Database initialization cancelled")
+            logger.info("If you need to initialize the database, delete the file manually:")
+            logger.info(f"  rm {db_path}")
             return False
         else:
             logger.info("Recreating database...")
@@ -70,12 +88,13 @@ def init_database():
     logger.info("Verifying Database Schema")
     logger.info("=" * 60)
 
+    # V2 스키마 테이블 (machines 테이블 제거됨)
     expected_tables = [
-        "lines",
         "processes",
         "plc_connections",
         "tags",
-        "polling_groups"
+        "polling_groups",
+        "alarm_masters"  # V2에서 추가됨
     ]
 
     table_names = manager.get_table_names()
@@ -139,18 +158,18 @@ def test_database_operations():
     logger.info("=" * 60)
 
     try:
-        # 테스트 1: 라인 삽입
-        logger.info("Test 1: Insert test line...")
+        # 테스트 1: 공정 삽입 (V2 - processes 테이블이 독립적)
+        logger.info("Test 1: Insert test process...")
         manager.execute_update(
-            "INSERT INTO lines (line_code, line_name) VALUES (?, ?)",
-            ("TEST01", "Test Line")
+            "INSERT INTO processes (process_code, process_name) VALUES (?, ?)",
+            ("TEST01", "Test Process")
         )
         logger.info("✓ Insert successful")
 
         # 테스트 2: 조회
-        logger.info("Test 2: Query test line...")
+        logger.info("Test 2: Query test process...")
         results = manager.execute_query(
-            "SELECT * FROM lines WHERE line_code = ?",
+            "SELECT * FROM processes WHERE process_code = ?",
             ("TEST01",)
         )
         if results:
@@ -159,28 +178,20 @@ def test_database_operations():
             logger.error("✗ Query failed - No results")
 
         # 테스트 3: 삭제 (테스트 데이터 정리)
-        logger.info("Test 3: Delete test line...")
+        logger.info("Test 3: Delete test process...")
         manager.execute_update(
-            "DELETE FROM lines WHERE line_code = ?",
+            "DELETE FROM processes WHERE process_code = ?",
             ("TEST01",)
         )
         logger.info("✓ Delete successful")
 
-        # 테스트 4: 14자리 설비 코드 테스트
+        # 테스트 4: 14자리 설비 코드 테스트 (V2)
         logger.info("Test 4: Insert 14-digit process code...")
 
-        # 먼저 라인 추가
+        # 14자리 설비 코드로 공정 추가 (V2에서는 line_id 불필요)
         manager.execute_update(
-            "INSERT INTO lines (line_code, line_name) VALUES (?, ?)",
-            ("LINE01", "TUB 가공 라인")
-        )
-        line_results = manager.execute_query("SELECT id FROM lines WHERE line_code = ?", ("LINE01",))
-        line_id = line_results[0]['id']
-
-        # 14자리 설비 코드로 공정 추가
-        manager.execute_update(
-            "INSERT INTO processes (line_id, process_code, process_name) VALUES (?, ?, ?)",
-            (line_id, "KRCWO12ELOA101", "Test Process")
+            "INSERT INTO processes (process_code, process_name, location) VALUES (?, ?, ?)",
+            ("KRCWO12ELOA101", "Test Process", "Test Location")
         )
         logger.info("✓ 14-digit process code inserted successfully")
 
@@ -196,7 +207,7 @@ def test_database_operations():
             logger.error("✗ UTF-8 test failed")
 
         # 테스트 데이터 정리
-        manager.execute_update("DELETE FROM lines WHERE line_code = ?", ("LINE01",))
+        manager.execute_update("DELETE FROM processes WHERE process_code = ?", ("KRCWO12ELOA101",))
 
         logger.info("=" * 60)
         logger.info("✓ All database tests passed!")

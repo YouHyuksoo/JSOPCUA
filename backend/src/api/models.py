@@ -3,7 +3,7 @@ Pydantic Models for Database Management API
 
 Feature 5: Database Management REST API
 Provides request/response models for CRUD operations on:
-- Lines, Processes, PLC Connections, Tags, Polling Groups
+- Machines, Processes, PLC Connections, Tags, Polling Groups
 """
 
 from datetime import datetime
@@ -37,31 +37,31 @@ class ErrorResponse(BaseModel):
 
 
 # ==============================================================================
-# Line Models
+# Machine Models
 # ==============================================================================
 
-class LineBase(BaseModel):
-    """Base Line model"""
-    line_code: str = Field(max_length=50)
-    line_name: str = Field(max_length=200)
+class MachineBase(BaseModel):
+    """Base Machine model"""
+    machine_code: str = Field(max_length=50)
+    machine_name: str = Field(max_length=200)
     location: Optional[str] = Field(None, max_length=100)
     enabled: bool = True
 
 
-class LineCreate(LineBase):
-    """Line creation request"""
+class MachineCreate(MachineBase):
+    """Machine creation request"""
     pass
 
 
-class LineUpdate(BaseModel):
-    """Line update request"""
-    line_name: Optional[str] = Field(None, max_length=200)
+class MachineUpdate(BaseModel):
+    """Machine update request"""
+    machine_name: Optional[str] = Field(None, max_length=200)
     location: Optional[str] = Field(None, max_length=100)
     enabled: Optional[bool] = None
 
 
-class LineResponse(LineBase):
-    """Line response"""
+class MachineResponse(MachineBase):
+    """Machine response"""
     id: int
     created_at: datetime
     updated_at: datetime
@@ -75,7 +75,7 @@ class LineResponse(LineBase):
 
 class ProcessBase(BaseModel):
     """Base Process model"""
-    line_id: int
+    machine_id: int
     process_sequence: int
     process_code: str = Field(min_length=14, max_length=14)
     process_name: str = Field(max_length=200)
@@ -228,7 +228,7 @@ class TagImportResult(BaseModel):
 class PollingGroupBase(BaseModel):
     """Base Polling Group model"""
     group_name: str = Field(max_length=200)
-    line_code: Optional[str] = Field(None, max_length=50)
+    machine_code: Optional[str] = Field(None, max_length=50)
     process_code: Optional[str] = Field(None, max_length=50)
     plc_id: int
     mode: str = Field(default='FIXED')
@@ -275,3 +275,40 @@ class PollingGroupResponse(PollingGroupBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+# ==============================================================================
+# Alarm Models (Feature 7: Monitor Web UI)
+# ==============================================================================
+
+class Alarm(BaseModel):
+    """Alarm model from Oracle DB"""
+    alarm_id: int
+    equipment_code: str
+    equipment_name: str
+    alarm_type: str  # '알람' or '일반'
+    alarm_message: str
+    occurred_at: datetime
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlarmStatistics(BaseModel):
+    """Alarm statistics model aggregated by equipment"""
+    equipment_code: str
+    equipment_name: str
+    alarm_count: int
+    general_count: int
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AlarmStatisticsResponse(BaseModel):
+    """Alarm statistics response wrapper"""
+    equipment: List[AlarmStatistics]
+    last_updated: datetime
+
+
+class RecentAlarmsResponse(BaseModel):
+    """Recent alarms response wrapper"""
+    alarms: List[Alarm]

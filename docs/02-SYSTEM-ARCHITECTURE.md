@@ -1360,10 +1360,17 @@ export default function MonitoringDashboard() {
 - **장점**: 매번 connect/disconnect 오버헤드 제거
 - **연결 테스트**: acquire 시 연결 상태 확인, 끊김 시 자동 재연결
 
-### 2.4.4 수동 폴링 제어
-- **원칙**: 백엔드 시작 시 폴링 엔진은 STOPPED 상태
-- **이유**: 사용자가 준비 완료 후 수동으로 시작
-- **관리 웹**: 시작/중지/재시작 버튼 제공
+### 2.4.4 수동 시스템 제어 (구현 완료)
+- **원칙**: 백엔드 FastAPI 서버 시작 시 폴링 엔진은 자동으로 시작되지 않음
+- **이유**: 사용자가 PLC 설정 및 준비 작업을 완료한 후 수동으로 시작 필요
+- **관리 웹**: 대시보드에 시스템 제어 패널 제공 (시작/중지/재시작 버튼)
+- **API 엔드포인트**:
+  - `POST /api/system/start` - 시스템 시작 (폴링 엔진 초기화)
+  - `POST /api/system/stop` - 시스템 중지
+  - `POST /api/system/restart` - 시스템 재시작
+  - `GET /api/system/status` - 시스템 상태 조회 (uptime, 폴링 그룹 수 포함)
+- **상태 관리**: Running/Stopped/Starting/Stopping/Error/Unavailable
+- **실시간 업데이트**: 시스템 제어 패널은 3초마다 상태를 자동 갱신
 
 ---
 

@@ -56,6 +56,7 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 
 ### Feature 6: Admin 웹 UI (시스템 관리) ✅
 - **shadcn/ui 기반 관리 인터페이스**
+- **시스템 제어 패널**: SCADA 시스템 시작/중지/재시작 (수동 제어)
 - 라인/공정/PLC/태그 관리 페이지 (CRUD)
 - 폴링 그룹 관리 페이지 (시작/중지 제어)
 - 시스템 상태 대시보드 (실시간 모니터링)
@@ -63,6 +64,7 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 - CSV 일괄 업로드 (태그)
 - React Hook Form + Zod 검증
 - Tailwind CSS 반응형 디자인
+- 다크 모드 테마
 
 ### 향후 기능
 
@@ -89,6 +91,7 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 2. **데이터 저장**: Oracle DB에 실시간 저장
 3. **시스템 관리**: 라인/공정/PLC/태그/폴링그룹 CRUD
 4. **실시간 모니터링**: WebSocket 기반 현재 값 표시
+5. **시스템 제어**: 수동 시작/중지 (백엔드 서버 시작 시 자동 실행 안 됨)
 
 ### ❌ 제외 (별도 시스템)
 1. **히스토리 조회**: Oracle DB에서 과거 데이터 조회
@@ -97,6 +100,15 @@ JSScada는 Mitsubishi Q Series PLC와 통신하여 실시간 데이터를 수집
 4. **리포트 생성**: 통계 및 분석 리포트
 
 ## 빠른 시작
+
+### 사전 체크리스트
+
+시작하기 전에 다음을 확인하세요:
+
+- [ ] Python 3.11+ 설치
+- [ ] Node.js 18+ 설치
+- [ ] `backend/config/scada.db` 파일 존재 여부 확인 (없으면 초기화 필요)
+- [ ] `backend/.env` 파일 존재 여부 확인 (없으면 `.env.example` 복사 필요)
 
 ### 1. 전체 설치 (모노레포)
 
@@ -118,18 +130,49 @@ venv\Scripts\activate     # Windows
 # 의존성 설치
 pip install -r requirements.txt
 
-# 환경 변수 설정
-cp .env.example .env
+# 환경 설정 파일 생성 및 수정
+copy .env.example .env  # Windows
+# 또는
+cp .env.example .env    # Linux/Mac
 
-# 데이터베이스 초기화
+# .env 파일을 열어서 필요한 설정 수정
+# - LOG_LEVEL: 로그 레벨 (DEBUG, INFO, WARNING, ERROR)
+# - ORACLE_HOST, ORACLE_USERNAME, ORACLE_PASSWORD: Oracle DB 연결 정보
+notepad .env  # Windows
+# 또는
+nano .env     # Linux/Mac
+
+# 데이터베이스 초기화 (선택사항 - 이미 config/scada.db가 있으면 스킵)
+# 스키마가 이미 생성되어 있는지 확인
+python -c "import os; print('✅ DB exists' if os.path.exists('config/scada.db') else '❌ DB not found - need to initialize')"
+
+# DB가 없거나 완전히 리셋하려면 초기화 실행
 python src/scripts/init_database.py
 
 # 샘플 데이터 생성 (선택사항)
 python src/scripts/create_sample_data.py
 
-# FastAPI 서버 실행
-python -m uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
+# FastAPI 서버 실행 (.env 파일 설정 자동 적용)
+python src/api/main.py
+
+# 또는 개발 모드 (자동 리로드)
+uvicorn src.api.main:app --reload
+
+# ⚠️ 중요: SCADA 폴링 시스템은 자동으로 시작되지 않습니다
+# Admin Web UI (http://localhost:3000)에서 시스템 제어 패널을 통해 수동으로 시작해야 합니다
 ```
+
+**데이터베이스 초기화가 필요한 경우:**
+- ❌ **불필요**: `config/scada.db` 파일이 이미 존재하고 테이블이 생성되어 있는 경우
+- ✅ **필요**: 처음 프로젝트를 clone했거나, 데이터베이스를 완전히 리셋하고 싶은 경우
+
+**로그 레벨 변경:**
+- `.env` 파일에서 `LOG_LEVEL=DEBUG` 설정 후 재시작
+- 외부 환경변수 설정 불필요!
+
+**데이터 입력 방법:**
+- Admin Web UI (http://localhost:3000)에서 수동으로 설비, 공정, PLC, 태그 등록
+- 또는 샘플 데이터 스크립트 실행 (있는 경우)
 
 ### 3. Frontend 개발 서버 실행
 
@@ -224,3 +267,40 @@ Proprietary
 ## 문의
 
 프로젝트 관련 문의는 개발팀에게 연락하세요.
+
+---
+
+## Feature 7: Monitor Web UI
+
+### 개요
+17개 설비의 실시간 상태를 모니터링하고 알람 정보를 표시하는 웹 기반 대시보드입니다.
+
+### 주요 기능
+- **실시간 설비 상태 모니터링** (User Story 1): WebSocket 연결을 통해 1초 주기로 17개 설비의 상태를 5가지 색상으로 표시
+- **설비별 알람 통계** (User Story 2): Oracle DB에서 10초 주기로 알람 합계 및 일반 건수 조회
+- **최근 알람 목록** (User Story 3): 최근 5개 알람을 시간 역순으로 표시
+
+### 기술 스택
+- Next.js 14 App Router
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- axios
+- WebSocket
+
+### 실행
+```bash
+npm run dev:monitor  # http://localhost:3001
+```
+
+### API Endpoints
+- `GET /api/alarms/statistics` - 설비별 알람 통계
+- `GET /api/alarms/recent?limit=5` - 최근 알람 목록
+- `GET /api/alarms/health` - Oracle DB 연결 상태
+- `ws://localhost:8000/ws/monitor` - WebSocket 실시간 설비 상태
+
+### 테스트
+```bash
+python backend/src/scripts/test_monitor_ui.py
+```
+

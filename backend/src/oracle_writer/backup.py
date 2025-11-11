@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from typing import List
 from pathlib import Path
+from src.config.paths import get_backup_dir
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,9 @@ class CSVBackup:
         backup_dir: Directory path for backup files
     """
 
-    def __init__(self, backup_dir: str = "backend/backup"):
+    def __init__(self, backup_dir: str = None):
+        if backup_dir is None:
+            backup_dir = get_backup_dir()
         """
         Initialize CSV backup handler
 

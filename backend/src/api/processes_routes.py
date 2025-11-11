@@ -7,12 +7,12 @@ Provides CRUD operations for production processes
 
 from typing import List
 from fastapi import APIRouter, Depends, status
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 from .models import ProcessCreate, ProcessUpdate, ProcessResponse, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
-from database.validators import (
-    validate_line_exists,
+from src.database.validators import (
+    validate_machine_exists,
     validate_process_code_unique,
     validate_process_code
 )
@@ -29,8 +29,8 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
     """
     Create a new production process
 
-    - **line_id**: ID of parent line (must exist)
-    - **process_sequence**: Sequence number in line
+    - **machine_id**: ID of parent machine (must exist)
+    - **process_sequence**: Sequence number in machine
     - **process_code**: 14-character process code (format: [A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3})
     - **process_name**: Process name (max 200 chars)
     - **equipment_type**: Optional equipment type (max 10 chars)
@@ -39,7 +39,7 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
     Returns created process with id, created_at, updated_at
     """
     # Validate foreign key
-    validate_line_exists(db, process.line_id)
+    validate_machine_exists(db, process.machine_id)
 
     # Validate process code format
     validate_process_code(process.process_code)
@@ -51,12 +51,12 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO processes (
-                line_id, process_sequence, process_code, process_name,
-                equipment_type, enabled
+                machine_id, sequence_order, process_code, process_name,
+                description, is_active
             )
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            process.line_id,
+            process.machine_id,
             process.process_sequence,
             process.process_code,
             process.process_name,
@@ -75,14 +75,15 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
         cursor.execute("SELECT * FROM processes WHERE id = ?", (process_id,))
         row = cursor.fetchone()
 
+    # Row format: (id, line_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
     return ProcessResponse(
         id=row[0],
-        line_id=row[1],
-        process_sequence=row[2],
-        process_code=row[3],
-        process_name=row[4],
-        equipment_type=row[5],
-        enabled=bool(row[6]),
+        machine_id=row[1],
+        process_sequence=row[5],  # sequence_order
+        process_code=row[2],
+        process_name=row[3],
+        equipment_type=row[4],  # description
+        enabled=bool(row[6]),  # is_active
         created_at=row[7],
         updated_at=row[8]
     )
@@ -94,23 +95,23 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
 
 @router.get("", response_model=PaginatedResponse[ProcessResponse])
 def list_processes(
-    line_id: int = None,
+    machine_id: int = None,
     pagination: PaginationParams = Depends(),
     db: SQLiteManager = Depends(get_db)
 ):
     """
     List all production processes with pagination
 
-    - **line_id**: Optional filter by line ID
+    - **machine_id**: Optional filter by machine ID
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 50, max: 1000)
 
     Returns paginated list of processes
     """
     # Build query
-    where_clause = "WHERE line_id = ?" if line_id else ""
-    params_count = (line_id,) if line_id else ()
-    params_list = (line_id, pagination.limit, pagination.skip) if line_id else (pagination.limit, pagination.skip)
+    where_clause = "WHERE machine_id = ?" if machine_id else ""
+    params_count = (machine_id,) if machine_id else ()
+    params_list = (machine_id, pagination.limit, pagination.skip) if machine_id else (pagination.limit, pagination.skip)
 
     # Get total count
     with db.get_connection() as conn:
@@ -124,20 +125,21 @@ def list_processes(
         cursor.execute(f"""
             SELECT * FROM processes
             {where_clause}
-            ORDER BY line_id, process_sequence
+            ORDER BY machine_id, sequence_order
             LIMIT ? OFFSET ?
         """, params_list)
         rows = cursor.fetchall()
 
+    # Row format: (id, machine_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
     processes = [
         ProcessResponse(
             id=row[0],
-            line_id=row[1],
-            process_sequence=row[2],
-            process_code=row[3],
-            process_name=row[4],
-            equipment_type=row[5],
-            enabled=bool(row[6]),
+            machine_id=row[1],
+            process_sequence=row[5],  # sequence_order
+            process_code=row[2],
+            process_name=row[3],
+            equipment_type=row[4],  # description
+            enabled=bool(row[6]),  # is_active
             created_at=row[7],
             updated_at=row[8]
         )
@@ -173,14 +175,15 @@ def get_process(process_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("Process", process_id)
 
+    # Row format: (id, machine_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
     return ProcessResponse(
         id=row[0],
-        line_id=row[1],
-        process_sequence=row[2],
-        process_code=row[3],
-        process_name=row[4],
-        equipment_type=row[5],
-        enabled=bool(row[6]),
+        machine_id=row[1],
+        process_sequence=row[5],  # sequence_order
+        process_code=row[2],
+        process_name=row[3],
+        equipment_type=row[4],  # description
+        enabled=bool(row[6]),  # is_active
         created_at=row[7],
         updated_at=row[8]
     )
@@ -205,7 +208,7 @@ def update_process(
     - **equipment_type**: Optional new equipment type
     - **enabled**: Optional enable/disable flag
 
-    Note: process_code and line_id cannot be updated
+    Note: process_code and machine_id cannot be updated
 
     Returns updated process
     """
@@ -221,7 +224,7 @@ def update_process(
     params = []
 
     if process_update.process_sequence is not None:
-        updates.append("process_sequence = ?")
+        updates.append("sequence_order = ?")
         params.append(process_update.process_sequence)
 
     if process_update.process_name is not None:
@@ -229,11 +232,11 @@ def update_process(
         params.append(process_update.process_name)
 
     if process_update.equipment_type is not None:
-        updates.append("equipment_type = ?")
+        updates.append("description = ?")
         params.append(process_update.equipment_type)
 
     if process_update.enabled is not None:
-        updates.append("enabled = ?")
+        updates.append("is_active = ?")
         params.append(process_update.enabled)
 
     if not updates:

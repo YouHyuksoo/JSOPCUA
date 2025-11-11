@@ -7,14 +7,17 @@ Provides dependency injection for database sessions, pagination, and logging
 
 from typing import Optional
 from fastapi import Query
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 import logging
 from datetime import datetime
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Database path (same as Feature 1)
-DB_PATH = "backend/config/scada.db"
+# Database path (same as Feature 1) - use absolute path
+_current_file = Path(__file__).resolve()  # .../backend/src/api/dependencies.py
+_backend_dir = _current_file.parent.parent.parent  # .../backend
+DB_PATH = str(_backend_dir / "config" / "scada.db")
 
 
 # ==============================================================================

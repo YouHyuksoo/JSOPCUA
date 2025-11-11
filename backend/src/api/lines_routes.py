@@ -7,11 +7,11 @@ Provides CRUD operations for production lines
 
 from typing import List
 from fastapi import APIRouter, Depends, status
-from database.sqlite_manager import SQLiteManager
+from src.database.sqlite_manager import SQLiteManager
 from .models import LineCreate, LineUpdate, LineResponse, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
-from database.validators import validate_line_code_unique
+from src.database.validators import validate_line_code_unique
 
 router = APIRouter(prefix="/api/lines", tags=["lines"])
 
@@ -38,7 +38,7 @@ def create_line(line: LineCreate, db: SQLiteManager = Depends(get_db)):
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO lines (line_code, line_name, location, enabled)
+            INSERT INTO lines (line_code, line_name, description, is_active)
             VALUES (?, ?, ?, ?)
         """, (line.line_code, line.line_name, line.location, line.enabled))
         conn.commit()
@@ -53,12 +53,13 @@ def create_line(line: LineCreate, db: SQLiteManager = Depends(get_db)):
         cursor.execute("SELECT * FROM lines WHERE id = ?", (line_id,))
         row = cursor.fetchone()
 
+    # Row format: (id, line_code, line_name, description, is_active, created_at, updated_at)
     return LineResponse(
         id=row[0],
         line_code=row[1],
         line_name=row[2],
-        location=row[3],
-        enabled=bool(row[4]),
+        location=row[3],  # description
+        enabled=bool(row[4]),  # is_active
         created_at=row[5],
         updated_at=row[6]
     )
@@ -97,13 +98,14 @@ def list_lines(
         """, (pagination.limit, pagination.skip))
         rows = cursor.fetchall()
 
+    # Row format: (id, line_code, line_name, description, is_active, created_at, updated_at)
     lines = [
         LineResponse(
             id=row[0],
             line_code=row[1],
             line_name=row[2],
-            location=row[3],
-            enabled=bool(row[4]),
+            location=row[3],  # description
+            enabled=bool(row[4]),  # is_active
             created_at=row[5],
             updated_at=row[6]
         )
@@ -139,12 +141,13 @@ def get_line(line_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("Line", line_id)
 
+    # Row format: (id, line_code, line_name, description, is_active, created_at, updated_at)
     return LineResponse(
         id=row[0],
         line_code=row[1],
         line_name=row[2],
-        location=row[3],
-        enabled=bool(row[4]),
+        location=row[3],  # description
+        enabled=bool(row[4]),  # is_active
         created_at=row[5],
         updated_at=row[6]
     )
@@ -186,11 +189,11 @@ def update_line(
         params.append(line_update.line_name)
 
     if line_update.location is not None:
-        updates.append("location = ?")
+        updates.append("description = ?")
         params.append(line_update.location)
 
     if line_update.enabled is not None:
-        updates.append("enabled = ?")
+        updates.append("is_active = ?")
         params.append(line_update.enabled)
 
     if not updates:

@@ -111,41 +111,57 @@ class PollingEngine:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
-            # Load polling groups
+            # Load polling groups with PLC info
             cursor.execute("""
-                SELECT id, group_name, plc_code, mode, interval_ms, is_active
-                FROM polling_groups
-                ORDER BY id
+                SELECT pg.id, pg.group_name, pg.polling_mode, pg.polling_interval_ms,
+                       pg.is_active, pg.plc_id, pc.plc_code
+                FROM polling_groups pg
+                LEFT JOIN plc_connections pc ON pg.plc_id = pc.id
+                ORDER BY pg.id
             """)
 
             rows = cursor.fetchall()
             logger.info(f"Found {len(rows)} polling groups in database")
 
             for row in rows:
-                # Load tags for this group
+                # Skip if no PLC assigned
+                if not row['plc_id'] or not row['plc_code']:
+                    logger.warning(f"Polling group {row['group_name']} has no PLC assigned, skipping")
+                    continue
+
+                # Load tags for this group (must match both polling_group_id and plc_id)
                 cursor.execute("""
-                    SELECT address
+                    SELECT tag_address
                     FROM tags
                     WHERE polling_group_id = ?
-                    ORDER BY address
-                """, (row['id'],))
+                      AND plc_id = ?
+                      AND is_active = 1
+                    ORDER BY tag_address
+                """, (row['id'], row['plc_id']))
 
                 tag_rows = cursor.fetchall()
-                tag_addresses = [tag_row['address'] for tag_row in tag_rows]
+
+                # Skip if no tags
+                if not tag_rows:
+                    logger.warning(f"Polling group {row['group_name']} has no active tags, skipping")
+                    continue
+
+                plc_code = row['plc_code']
+                tag_addresses = [tag_row['tag_address'] for tag_row in tag_rows]
 
                 # Create PollingGroup
                 try:
                     group = PollingGroup(
                         group_id=row['id'],
                         group_name=row['group_name'],
-                        plc_code=row['plc_code'],
-                        mode=PollingMode(row['mode']),
-                        interval_ms=row['interval_ms'],
+                        plc_code=plc_code,
+                        mode=PollingMode(row['polling_mode']),
+                        interval_ms=row['polling_interval_ms'],
                         is_active=bool(row['is_active']),
                         tag_addresses=tag_addresses
                     )
                     groups.append(group)
-                    logger.debug(f"Loaded group {group.group_name}: {len(tag_addresses)} tags")
+                    logger.debug(f"Loaded group {group.group_name}: {len(tag_addresses)} tags, PLC={plc_code}")
 
                 except ValueError as e:
                     logger.error(f"Invalid polling group configuration for {row['group_name']}: {e}")

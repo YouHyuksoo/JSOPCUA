@@ -70,3 +70,10 @@ Thumbs.db
 # Backup files
 *.bak
 *_backup_*.db
+
+.claude/commands/
+.claude/commands/
+.claude/commands/
+nul
+start-backend.bat
+.claude/settings.local.json

@@ -3,23 +3,34 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { createProcess } from '@/lib/api/processes';
-import { getLines } from '@/lib/api/lines';
+import { getMachines } from '@/lib/api/machines';
 import { ProcessFormData } from '@/lib/validators/process';
-import { Line } from '@/lib/types/line';
+import { Machine } from '@/lib/types/machine';
 import ProcessForm from '@/components/forms/ProcessForm';
-import Nav from '@/components/nav';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { ArrowLeft, Network, Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
 export default function NewProcessPage() {
   const router = useRouter();
-  const [lines, setLines] = useState<Line[]>([]);
+  const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getLines(1, 100).then((data) => {
-      setLines(data.items);
-      setLoading(false);
-    });
+    const fetchMachines = async () => {
+      try {
+        const data = await getMachines(1, 100);
+        setMachines(data.items);
+      } catch (error) {
+        toast.error('설비 목록 조회 실패');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMachines();
   }, []);
 
   const handleSubmit = async (data: ProcessFormData) => {
@@ -36,17 +47,40 @@ export default function NewProcessPage() {
     router.push('/processes');
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <Nav />
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">새 공정 생성</h1>
-        <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
-          <ProcessForm lines={lines} onSubmit={handleSubmit} onCancel={handleCancel} />
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/processes">
+          <Button variant="outline" size="sm" className="bg-gray-800 border-gray-700 hover:bg-gray-700">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+            <Network className="h-8 w-8" />
+            새 공정 추가
+          </h1>
+          <p className="text-gray-400 mt-1">새로운 공정을 등록합니다</p>
         </div>
       </div>
+
+      <Card className="bg-gray-900 border-gray-800 max-w-2xl">
+        <CardHeader>
+          <CardTitle className="text-white">공정 정보</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProcessForm machines={machines} onSubmit={handleSubmit} onCancel={handleCancel} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
