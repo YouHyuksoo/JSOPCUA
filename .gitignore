@@ -25,13 +25,14 @@ ENV/
 env/
 backend/.venv/
 
-# SQLite
+# SQLite & Data
+backend/data/
 *.db
 *.sqlite
 *.sqlite3
 
 # Logs
-logs/
+backend/logs/
 *.log
 
 # Environment
@@ -77,3 +78,10 @@ Thumbs.db
 nul
 start-backend.bat
 .claude/settings.local.json
+그림1.png
+익스포트.sql
+CLAUDE.md
+익스포트.sql
+ehm도면.pdf
+kill-port-8000.bat
+kill-ports.bat
