@@ -95,7 +95,7 @@ class Settings:
     @property
     def DATABASE_PATH(self) -> str:
         """SQLite 데이터베이스 경로"""
-        return os.getenv("DATABASE_PATH", "config/scada.db")
+        return os.getenv("DATABASE_PATH", "data/scada.db")
 
     # =========================================================================
     # Oracle Database Configuration

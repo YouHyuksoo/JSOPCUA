@@ -5,6 +5,7 @@ Feature 5: Database Management REST API
 Provides CRUD operations for polling groups
 """
 
+import logging
 from typing import List
 from fastapi import APIRouter, Depends, status
 from src.database.sqlite_manager import SQLiteManager
@@ -15,6 +16,8 @@ from src.database.validators import (
     validate_plc_exists,
     validate_polling_mode
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/polling-groups", tags=["polling-groups"])
 
@@ -52,19 +55,30 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO polling_groups (
-                group_name, polling_mode, polling_interval_ms, description, is_active, plc_id
+                group_name, polling_mode, polling_interval_ms, group_category, description, is_active, plc_id
             )
-            VALUES (?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             group.group_name,
             group.mode,  # polling_mode
             group.interval_ms,  # polling_interval_ms
+            group.group_category,  # group_category
             f"Line: {group.line_code or 'N/A'}, Process: {group.process_code or 'N/A'}",  # description
             group.enabled,  # is_active
             group.plc_id
         ))
-        conn.commit()
         group_id = cursor.lastrowid
+
+        # Assign tags to this polling group
+        if group.tag_ids:
+            placeholders = ','.join(['?'] * len(group.tag_ids))
+            cursor.execute(f"""
+                UPDATE tags
+                SET polling_group_id = ?
+                WHERE id IN ({placeholders})
+            """, [group_id] + group.tag_ids)
+
+        conn.commit()
 
     # Log operation
     log_crud_operation("CREATE", "Polling Group", group_id, success=True)
@@ -168,12 +182,13 @@ def get_polling_group_tags(group_id: int, db: SQLiteManager = Depends(get_db)):
         if not cursor.fetchone():
             raise_not_found("Polling Group", group_id)
 
-    # Get tags in group
+    # Get tags in group (is_active='Y'인 태그만 반환)
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             SELECT * FROM tags
             WHERE polling_group_id = ?
+              AND is_active = 1
             ORDER BY id
         """, (group_id,))
         rows = cursor.fetchall()
@@ -237,24 +252,44 @@ def update_polling_group(
         updates.append("polling_interval_ms = ?")
         params.append(group_update.interval_ms)
 
+    if group_update.group_category is not None:
+        updates.append("group_category = ?")
+        params.append(group_update.group_category)
+
     # trigger_bit_address is not in DB (ignored)
 
     if group_update.enabled is not None:
         updates.append("is_active = ?")
         params.append(group_update.enabled)
 
-    if not updates:
-        # No changes, return current group
-        return get_polling_group(group_id, db)
-
-    # Add updated_at
-    updates.append("updated_at = CURRENT_TIMESTAMP")
-    params.append(group_id)
-
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        query = f"UPDATE polling_groups SET {', '.join(updates)} WHERE id = ?"
-        cursor.execute(query, params)
+
+        # Update polling group if there are changes
+        if updates:
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(group_id)
+            query = f"UPDATE polling_groups SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, params)
+
+        # Update tag assignments if provided
+        if group_update.tag_ids is not None:
+            # First, remove this group from all tags
+            cursor.execute("""
+                UPDATE tags
+                SET polling_group_id = NULL
+                WHERE polling_group_id = ?
+            """, (group_id,))
+
+            # Then, assign new tags
+            if group_update.tag_ids:
+                placeholders = ','.join(['?'] * len(group_update.tag_ids))
+                cursor.execute(f"""
+                    UPDATE tags
+                    SET polling_group_id = ?
+                    WHERE id IN ({placeholders})
+                """, [group_id] + group_update.tag_ids)
+
         conn.commit()
 
     # Log operation
@@ -262,6 +297,166 @@ def update_polling_group(
 
     # Return updated group
     return get_polling_group(group_id, db)
+
+
+# ==============================================================================
+# POST /api/polling-groups/{id}/start - Start polling group
+# ==============================================================================
+
+@router.post("/{group_id}/start")
+def start_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
+    """
+    Start a polling group
+
+    - **group_id**: Polling group ID
+
+    Returns success message
+    """
+    from src.polling.polling_group_manager import PollingGroupManager
+    from src.polling.exceptions import PollingGroupNotFoundError, PollingGroupAlreadyRunningError
+
+    # Check group exists
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, group_name FROM polling_groups WHERE id = ?", (group_id,))
+        group = cursor.fetchone()
+        if not group:
+            raise_not_found("Polling Group", group_id)
+
+    # Get polling group manager instance
+    manager = PollingGroupManager.get_instance()
+    if manager is None:
+        # Manager not initialized yet
+        return {
+            "success": False,
+            "message": "Polling engine not initialized. Please start the backend service.",
+            "new_status": "stopped"
+        }
+
+    try:
+        # Start the polling group
+        result = manager.start_group(group_id)
+        return result
+
+    except (PollingGroupNotFoundError, PollingGroupAlreadyRunningError) as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "new_status": "stopped"
+        }
+    except Exception as e:
+        logger.error(f"Failed to start polling group {group_id}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"Failed to start polling group: {str(e)}",
+            "new_status": "error"
+        }
+
+
+# ==============================================================================
+# POST /api/polling-groups/{id}/stop - Stop polling group
+# ==============================================================================
+
+@router.post("/{group_id}/stop")
+def stop_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
+    """
+    Stop a polling group
+
+    - **group_id**: Polling group ID
+
+    Returns success message
+    """
+    from src.polling.polling_group_manager import PollingGroupManager
+    from src.polling.exceptions import PollingGroupNotFoundError, PollingGroupNotRunningError
+
+    # Check group exists
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, group_name FROM polling_groups WHERE id = ?", (group_id,))
+        group = cursor.fetchone()
+        if not group:
+            raise_not_found("Polling Group", group_id)
+
+    # Get polling group manager instance
+    manager = PollingGroupManager.get_instance()
+    if manager is None:
+        return {
+            "success": False,
+            "message": "Polling engine not initialized. Please start the backend service.",
+            "new_status": "stopped"
+        }
+
+    try:
+        # Stop the polling group
+        result = manager.stop_group(group_id)
+        return result
+
+    except (PollingGroupNotFoundError, PollingGroupNotRunningError) as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "new_status": "stopped"
+        }
+    except Exception as e:
+        logger.error(f"Failed to stop polling group {group_id}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"Failed to stop polling group: {str(e)}",
+            "new_status": "error"
+        }
+
+
+# ==============================================================================
+# POST /api/polling-groups/{id}/restart - Restart polling group
+# ==============================================================================
+
+@router.post("/{group_id}/restart")
+def restart_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
+    """
+    Restart a polling group
+
+    - **group_id**: Polling group ID
+
+    Returns success message
+    """
+    from src.polling.polling_group_manager import PollingGroupManager
+    from src.polling.exceptions import PollingGroupNotFoundError
+
+    # Check group exists
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, group_name FROM polling_groups WHERE id = ?", (group_id,))
+        group = cursor.fetchone()
+        if not group:
+            raise_not_found("Polling Group", group_id)
+
+    # Get polling group manager instance
+    manager = PollingGroupManager.get_instance()
+    if manager is None:
+        return {
+            "success": False,
+            "message": "Polling engine not initialized. Please start the backend service.",
+            "new_status": "stopped"
+        }
+
+    try:
+        # Restart the polling group
+        result = manager.restart_group(group_id)
+        return result
+
+    except PollingGroupNotFoundError as e:
+        return {
+            "success": False,
+            "message": str(e),
+            "new_status": "stopped"
+        }
+    except Exception as e:
+        logger.error(f"Failed to restart polling group {group_id}: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"Failed to restart polling group: {str(e)}",
+            "new_status": "error"
+        }
 
 
 # ==============================================================================
@@ -302,23 +497,36 @@ def delete_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
 
 def _row_to_polling_group_response(row) -> PollingGroupResponse:
     """Convert database row to PollingGroupResponse"""
-    # Row format: (id, group_name, polling_mode, polling_interval_ms, description, is_active, created_at, updated_at, plc_id)
-    # Note: plc_id is at index 8 but may be NULL
+    # Row format: (id, group_name, plc_id, polling_mode, polling_interval_ms, trigger_bit_address,
+    #              trigger_bit_offset, auto_reset_trigger, priority, description, is_active, created_at, updated_at)
+    group_id = row[0]
+
+    # Count tags in this polling group
+    from .dependencies import get_db
+    db = next(get_db())
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM tags WHERE polling_group_id = ? AND is_active = 1", (group_id,))
+        tag_count = cursor.fetchone()[0]
+
     return PollingGroupResponse(
-        id=row[0],
+        id=group_id,
         group_name=row[1],
+        line_code=None,  # Legacy field, not in DB
         machine_code=None,  # Not in DB
         process_code=None,  # Not in DB
-        plc_id=row[8] if len(row) > 8 and row[8] is not None else 0,  # Handle NULL or missing
-        mode=row[2],  # polling_mode
-        interval_ms=row[3],  # polling_interval_ms
-        trigger_bit_address=None,  # Not in DB
-        trigger_bit_offset=0,  # Not in DB
-        auto_reset_trigger=True,  # Not in DB
-        priority='NORMAL',  # Not in DB
-        enabled=bool(row[5]),  # is_active
-        created_at=row[6],
-        updated_at=row[7]
+        plc_id=row[2],
+        mode=row[3],  # polling_mode
+        interval_ms=row[4],  # polling_interval_ms
+        trigger_bit_address=row[5],
+        trigger_bit_offset=row[6],
+        auto_reset_trigger=bool(row[7]),
+        priority=row[8],
+        enabled=bool(row[10]),  # is_active
+        created_at=row[11],
+        updated_at=row[12],
+        tag_count=tag_count,
+        status="stopped"  # Default status, will be updated by polling engine
     )
 
 
@@ -336,7 +544,7 @@ def _row_to_tag_response(row) -> TagResponse:
         data_type=row[5],  # tag_type
         unit=str(row[6]) if row[6] else None,  # Convert to string if not None
         scale=float(row[7]) if row[7] is not None else 1.0,
-        machine_code=row[11],
+        machine_code=str(row[11]) if row[11] is not None else None,  # Convert to string
         polling_group_id=row[2],
         enabled=bool(row[13]),  # is_active
         created_at=row[16] if row[16] else datetime.now().isoformat(),

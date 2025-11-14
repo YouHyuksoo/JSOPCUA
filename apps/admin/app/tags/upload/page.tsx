@@ -50,8 +50,8 @@ export default function UploadTagsPage() {
     try {
       const result = await uploadCSV(file);
       toast.success(`${result.success_count}개 태그가 업로드되었습니다`);
-      if (result.failed_count > 0) {
-        toast.warning(`${result.failed_count}개 태그 업로드 실패`);
+      if (result.fail_count > 0) {
+        toast.warning(`${result.fail_count}개 태그 업로드 실패`);
       }
       router.push('/tags');
     } catch (error) {

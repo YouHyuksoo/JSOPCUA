@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getMachines, deleteMachine, syncMachinesFromOracle } from '@/lib/api/machines';
+import { getMachines, deleteMachine, syncMachinesFromOracle, getOracleConnectionInfo } from '@/lib/api/machines';
 import { Machine } from '@/lib/types/machine';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -16,20 +16,39 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import DeleteDialog from '@/components/DeleteDialog';
+import OracleSyncDialog from '@/components/OracleSyncDialog';
+import TablePagination from '@/components/TablePagination';
 import { toast } from 'sonner';
-import { Plus, Search, Edit, Trash2, Loader2, Settings, RefreshCw } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Plus, Search, Edit, Trash2, Loader2, Settings, RefreshCw, Filter } from 'lucide-react';
 
 export default function MachinesPage() {
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalItems, setTotalItems] = useState(0);
+  const itemsPerPage = 20;
 
-  const fetchMachines = async () => {
+  const fetchMachines = async (page = 1) => {
+    setLoading(true);
     try {
-      const data = await getMachines();
+      const data = await getMachines(page, itemsPerPage);
       setMachines(data.items);
+      setTotalPages(data.total_pages);
+      setTotalItems(data.total_count);
+      setCurrentPage(data.current_page);
     } catch (error) {
       toast.error('설비 목록 조회 실패');
     } finally {
@@ -38,8 +57,8 @@ export default function MachinesPage() {
   };
 
   useEffect(() => {
-    fetchMachines();
-  }, []);
+    fetchMachines(currentPage);
+  }, [currentPage]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -47,7 +66,7 @@ export default function MachinesPage() {
       await deleteMachine(deleteId);
       toast.success('설비가 삭제되었습니다');
       setDeleteId(null);
-      fetchMachines();
+      fetchMachines(currentPage);
     } catch (error) {
       toast.error('설비 삭제 실패');
     }
@@ -73,8 +92,12 @@ export default function MachinesPage() {
           );
         }
 
-        // Refresh machine list
-        fetchMachines();
+        // Refresh machine list and go to first page
+        setCurrentPage(1);
+        fetchMachines(1);
+
+        // Close dialog
+        setSyncDialogOpen(false);
       } else {
         toast.error('Oracle 동기화 실패');
       }
@@ -86,12 +109,24 @@ export default function MachinesPage() {
     }
   };
 
-  const filteredMachines = machines.filter(
-    (machine) =>
-      (machine.machine_name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (machine.machine_code?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (machine.location?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  );
+  // Filter machines based on search term and status (client-side filtering for current page)
+  const filteredMachines = machines.filter((machine) => {
+    // Status filter
+    if (statusFilter === 'active' && !machine.enabled) return false;
+    if (statusFilter === 'inactive' && machine.enabled) return false;
+
+    // Search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      return (
+        (machine.machine_name?.toLowerCase() || '').includes(searchLower) ||
+        (machine.machine_code?.toLowerCase() || '').includes(searchLower) ||
+        (machine.location?.toLowerCase() || '').includes(searchLower)
+      );
+    }
+
+    return true;
+  });
 
   if (loading) {
     return (
@@ -113,21 +148,12 @@ export default function MachinesPage() {
         </div>
         <div className="flex gap-2">
           <Button
-            onClick={handleSyncFromOracle}
+            onClick={() => setSyncDialogOpen(true)}
             disabled={syncing}
             className="bg-green-600 hover:bg-green-700"
           >
-            {syncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                동기화 중...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Oracle 동기화
-              </>
-            )}
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Oracle 동기화
           </Button>
           <Link href="/machines/new">
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -140,16 +166,39 @@ export default function MachinesPage() {
 
       <Card className="bg-gray-900 border-gray-800">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-white">설비 목록 ({filteredMachines.length})</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="설비 검색..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-gray-800 border-gray-700 text-white"
-              />
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle className="text-white">설비 목록 ({totalItems})</CardTitle>
+            <div className="flex items-center gap-2">
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-gray-400" />
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-40 bg-gray-800 border-gray-700 text-white">
+                    <SelectValue placeholder="상태 선택" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-gray-800 border-gray-700">
+                    <SelectItem value="all" className="text-white hover:bg-gray-700">
+                      전체 상태
+                    </SelectItem>
+                    <SelectItem value="active" className="text-white hover:bg-gray-700">
+                      활성
+                    </SelectItem>
+                    <SelectItem value="inactive" className="text-white hover:bg-gray-700">
+                      비활성
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {/* Search */}
+              <div className="relative w-64">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="설비 검색..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 bg-gray-800 border-gray-700 text-white"
+                />
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -223,6 +272,13 @@ export default function MachinesPage() {
               </TableBody>
             </Table>
           </div>
+          <TablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={totalItems}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
         </CardContent>
       </Card>
 
@@ -230,6 +286,16 @@ export default function MachinesPage() {
         open={deleteId !== null}
         onOpenChange={(open) => !open && setDeleteId(null)}
         onConfirm={handleDelete}
+      />
+
+      <OracleSyncDialog
+        open={syncDialogOpen}
+        onOpenChange={setSyncDialogOpen}
+        onConfirm={handleSyncFromOracle}
+        syncing={syncing}
+        title="설비 Oracle 동기화"
+        description="Oracle ICOM_MACHINE_MASTER 테이블에서 설비 정보를 가져와 동기화합니다."
+        fetchConnectionInfo={getOracleConnectionInfo}
       />
     </div>
   );

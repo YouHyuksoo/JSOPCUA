@@ -23,7 +23,7 @@ def test_plc_connection(plc_code: str = None, tag_address: str = "D100"):
         plc_code: 테스트할 PLC 코드 (None이면 첫 번째 활성 PLC 사용)
         tag_address: 읽을 태그 주소
     """
-    db_path = os.path.join(os.path.dirname(__file__), '../../config/scada.db')
+    db_path = os.path.join(os.path.dirname(__file__), '../../data/scada.db')
 
     print(f"\n{'='*60}")
     print("PLC Connection Test")

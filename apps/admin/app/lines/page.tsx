@@ -107,7 +107,6 @@ export default function LinesPage() {
                   <TableHead className="text-gray-400">ID</TableHead>
                   <TableHead className="text-gray-400">Name</TableHead>
                   <TableHead className="text-gray-400">Code</TableHead>
-                  <TableHead className="text-gray-400">Description</TableHead>
                   <TableHead className="text-gray-400">Created</TableHead>
                   <TableHead className="text-gray-400 text-right">Actions</TableHead>
                 </TableRow>
@@ -115,7 +114,7 @@ export default function LinesPage() {
               <TableBody>
                 {filteredLines.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={5} className="text-center text-gray-500 py-8">
                       No lines found
                     </TableCell>
                   </TableRow>
@@ -132,7 +131,6 @@ export default function LinesPage() {
                           {line.code}
                         </span>
                       </TableCell>
-                      <TableCell className="text-gray-400">{line.description || '-'}</TableCell>
                       <TableCell className="text-gray-400">
                         {new Date(line.created_at).toLocaleDateString()}
                       </TableCell>

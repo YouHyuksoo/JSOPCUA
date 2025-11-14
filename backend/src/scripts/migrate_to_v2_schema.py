@@ -21,8 +21,8 @@ from datetime import datetime
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-DB_PATH = backend_dir / "config" / "scada.db"
-BACKUP_PATH = backend_dir / "config" / f"scada_backup_v1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+DB_PATH = backend_dir / "data" / "scada.db"
+BACKUP_PATH = backend_dir / "data" / f"scada_backup_v1_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
 NEW_SCHEMA_PATH = backend_dir / "config" / "init_scada_db_v2.sql"
 
 

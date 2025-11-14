@@ -58,8 +58,14 @@ class MC3EClient:
             logger.info(f"Connecting to PLC: {self.plc_code} ({self.ip_address}:{self.port})")
 
             self._plc = Type3E()
+            # pymcprotocol의 connect() 메서드에 timeout 파라미터 전달
+            # 연결 후 소켓에 timeout 설정
             self._plc.connect(self.ip_address, self.port)
-            self._plc.settimeout(self.timeout)
+
+            # Type3E 객체의 내부 소켓에 timeout 설정
+            if hasattr(self._plc, 'sock') and self._plc.sock:
+                self._plc.sock.settimeout(self.timeout)
+
             self._is_connected = True
 
             logger.info(f"PLC connected successfully: {self.plc_code}")
@@ -176,8 +182,12 @@ class MC3EClient:
             start_time = time.time()
             logger.debug(f"[{self.plc_code}] Reading tag: {tag_address}")
 
-            # pymcprotocol을 사용하여 태그 읽기
-            value = self._plc.randomread(tag_address)
+            # pymcprotocol을 사용하여 태그 읽기 (batchread_wordunits 사용)
+            # D100은 1개 워드 읽기
+            values = self._plc.batchread_wordunits(headdevice=tag_address, readsize=1)
+
+            # 결과가 리스트면 첫 번째 값, 아니면 그대로 반환
+            value = values[0] if isinstance(values, list) and len(values) > 0 else values
 
             response_time = (time.time() - start_time) * 1000  # ms
             logger.info(f"[{self.plc_code}] Tag read successful: {tag_address} = {value} ({response_time:.2f}ms)")
@@ -253,25 +263,20 @@ class MC3EClient:
             for device_type, group_list in groups.items():
                 for start_addr, count, tags in group_list:
                     try:
-                        if count == 1:
-                            # 단일 태그 - randomread 사용
-                            value = self._plc.randomread(tags[0])
-                            results[tags[0]] = value
-                        else:
-                            # 연속 태그 - batchread_wordunits 사용
-                            head_device = format_device_address(device_type, start_addr)
-                            values = self._plc.batchread_wordunits(headdevice=head_device, readsize=count)
+                        # 연속 태그 - batchread_wordunits 사용
+                        head_device = format_device_address(device_type, start_addr)
+                        values = self._plc.batchread_wordunits(headdevice=head_device, readsize=count)
 
-                            # 결과 매핑
-                            if isinstance(values, list):
-                                for i, tag in enumerate(tags):
-                                    if i < len(values):
-                                        results[tag] = values[i]
-                                    else:
-                                        errors[tag] = "Index out of range"
-                            else:
-                                # 단일 값 반환된 경우
-                                results[tags[0]] = values
+                        # 결과 매핑
+                        if isinstance(values, list):
+                            for i, tag in enumerate(tags):
+                                if i < len(values):
+                                    results[tag] = values[i]
+                                else:
+                                    errors[tag] = "Index out of range"
+                        else:
+                            # 단일 값 반환된 경우
+                            results[tags[0]] = values
 
                     except Exception as e:
                         # 개별 그룹 에러 - 개별 읽기로 폴백
@@ -279,8 +284,9 @@ class MC3EClient:
 
                         for tag in tags:
                             try:
-                                value = self._plc.randomread(tag)
-                                results[tag] = value
+                                # 단일 태그도 batchread_wordunits 사용
+                                value = self._plc.batchread_wordunits(headdevice=tag, readsize=1)
+                                results[tag] = value[0] if isinstance(value, list) and len(value) > 0 else value
                             except Exception as e2:
                                 errors[tag] = str(e2)
                                 logger.error(f"[{self.plc_code}] Failed to read tag {tag}: {e2}")

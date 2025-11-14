@@ -25,9 +25,9 @@ def init_database():
     """데이터베이스 초기화 (스키마 생성)"""
 
     # 데이터베이스 경로
-    db_path = project_root / "config" / "scada.db"
+    db_path = project_root / "data" / "scada.db"
 
-    # V2 스키마 사용 (machines 테이블 제거, alarm_masters 추가)
+    # V2 스키마 사용 (machines 테이블 제거)
     sql_script_path = project_root / "config" / "init_scada_db_v2.sql"
 
     # V2 스키마가 없으면 기존 스키마 사용
@@ -93,8 +93,7 @@ def init_database():
         "processes",
         "plc_connections",
         "tags",
-        "polling_groups",
-        "alarm_masters"  # V2에서 추가됨
+        "polling_groups"
     ]
 
     table_names = manager.get_table_names()
@@ -150,7 +149,7 @@ def init_database():
 def test_database_operations():
     """데이터베이스 기본 작업 테스트"""
 
-    db_path = project_root / "config" / "scada.db"
+    db_path = project_root / "data" / "scada.db"
     manager = SQLiteManager(str(db_path))
 
     logger.info("\n" + "=" * 60)

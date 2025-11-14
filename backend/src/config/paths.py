@@ -22,7 +22,7 @@ SCRIPTS_DIR = BACKEND_ROOT / "scripts"
 TESTS_DIR = BACKEND_ROOT / "tests"
 
 # Database path
-DATABASE_PATH = CONFIG_DIR / "scada.db"
+DATABASE_PATH = DATA_DIR / "scada.db"
 
 # Ensure critical directories exist
 def ensure_directories():

@@ -10,14 +10,28 @@ from contextlib import asynccontextmanager
 
 from src.polling.polling_engine import PollingEngine
 from src.plc.pool_manager import PoolManager
+from src.config.logging_config import initialize_logging
 from .polling_routes import router as polling_router, set_polling_engine
 from .websocket_handler import websocket_endpoint, set_websocket_engine
 from .buffer_routes import router as buffer_router, set_buffer_components
 from .system_routes import router as system_router, set_system_engine
+from .machines_routes import router as machines_router
+from .processes_routes import router as processes_router
+from .plc_connections_routes import router as plc_connections_router
+from .tags_routes import router as tags_router
+from .polling_groups_routes import router as polling_groups_router
+from .alarm_routes import router as alarm_router
+from .logs_routes import router as logs_router
+from .websocket_monitor import websocket_monitor_endpoint, set_monitor_engine
+from .monitor_routes import router as monitor_router
+
+# Initialize logging on module import
+initialize_logging()
 
 # Global instances
 pool_manager: PoolManager = None
 polling_engine: PollingEngine = None
+polling_group_manager = None
 
 
 @asynccontextmanager
@@ -25,30 +39,38 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan manager
 
-    Initializes resources but does NOT start the polling engine automatically.
-    The engine must be started manually via /api/system/start endpoint.
+    Initializes resources including PollingGroupManager for REST API control.
+    The polling groups must be started manually via API endpoints.
     """
-    global pool_manager, polling_engine
+    global pool_manager, polling_engine, polling_group_manager
 
     # Startup
     print("Starting SCADA API Server...")
-    print("⚠️  Polling engine is NOT started automatically")
-    print("   Use /api/system/start to start the system")
+    print("⚠️  Polling groups are NOT started automatically")
+    print("   Use /api/polling-groups/{id}/start to start polling groups")
 
     # Use absolute path for database
     import os
     from pathlib import Path
+    from src.polling.polling_group_manager import PollingGroupManager
 
     # Get the project root directory (JSOPCUA)
     current_file = Path(__file__).resolve()  # .../backend/src/api/main.py
     backend_dir = current_file.parent.parent.parent  # .../backend
-    db_path = str(backend_dir / "config" / "scada.db")
+    db_path = str(backend_dir / "data" / "scada.db")
 
-    # Initialize components but don't start them
+    # Initialize PoolManager
     pool_manager = PoolManager(db_path)
-    polling_engine = PollingEngine(db_path, pool_manager)
-    # NOTE: polling_engine.initialize() is NOT called here
-    # It will be called when /api/system/start is invoked
+    pool_manager.initialize()
+    print(f"✅ PoolManager initialized: {pool_manager.get_plc_count()} PLC(s)")
+
+    # Initialize PollingGroupManager (singleton)
+    polling_group_manager = PollingGroupManager(db_path, pool_manager)
+    polling_group_manager.initialize()
+    print("✅ PollingGroupManager initialized")
+
+    # Also keep legacy polling_engine reference for backwards compatibility
+    polling_engine = polling_group_manager.polling_engine
 
     # Set engine in routes and WebSocket handler
     set_polling_engine(polling_engine)
@@ -56,14 +78,14 @@ async def lifespan(app: FastAPI):
     set_monitor_engine(polling_engine)
     set_system_engine(polling_engine)
 
-    print("✅ SCADA API Server ready (system stopped)")
+    print("✅ SCADA API Server ready (polling groups stopped)")
 
     yield
 
     # Shutdown
     print("Shutting down SCADA API Server...")
-    if polling_engine and polling_engine._initialized:
-        polling_engine.shutdown()
+    if polling_group_manager:
+        polling_group_manager.shutdown()
     if pool_manager:
         pool_manager.shutdown()
     print("Shutdown complete")
@@ -73,7 +95,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Polling Engine API",
     description="REST API for multi-threaded PLC polling engine control and monitoring",
-    version="1.0.0",
+    version="1.0.1",
     lifespan=lifespan
 )
 
@@ -129,23 +151,30 @@ app.add_exception_handler(
 # Feature 5: Database Management API - Routers
 # ==============================================================================
 
-from .machines_routes import router as machines_router
-from .processes_routes import router as processes_router
-from .plc_connections_routes import router as plc_connections_router
-from .tags_routes import router as tags_router
-from .polling_groups_routes import router as polling_groups_router
-from .alarm_routes import router as alarm_router
-from .websocket_monitor import websocket_monitor_endpoint, set_monitor_engine
+# 라우터(router)는 FastAPI에서 애플리케이션의 다양한 API 엔드포인트들을 논리적으로 구분하여 관리할 수 있도록 해주는 객체입니다.
+# 여러 기능별로 라우터를 정의하고 app.include_router()를 통해 FastAPI 앱에 등록하면, 하나의 app에 다수의 URL 그룹이 깔끔하게 추가됩니다.
+#
+# 예시:
+# from .machines_routes import router as machines_router
+#
+# app.include_router(machines_router, tags=["machines"])
+#
+# - from ... import router as ... : 해당 라우터 객체를 임포트합니다.
+# - app.include_router(...): 애플리케이션(app)에 API 라우터를 등록(포함)합니다.
+# - tags 매개변수는 이 라우터에 속한 엔드포인트들을 그룹화할 때 사용됩니다 (문서에 표시됨).
+#
+# 아래처럼 모든 주요 도메인별 라우터를 하나씩 app에 포함시켜, 각 도메인(예: machines, processes 등)별로 URL 경로가 자동으로 분리되어 관리됩니다.
 
-# Include all routers
-app.include_router(system_router)  # System control (start/stop)
-app.include_router(polling_router)
 app.include_router(machines_router, tags=["machines"])
 app.include_router(processes_router, tags=["processes"])
 app.include_router(plc_connections_router, tags=["plc-connections"])
 app.include_router(tags_router, tags=["tags"])
 app.include_router(polling_groups_router, tags=["polling-groups"])
 app.include_router(alarm_router, tags=["alarms"])
+app.include_router(logs_router, tags=["logs"])
+app.include_router(monitor_router, tags=["monitor"])
+app.include_router(system_router)  # System control (start/stop)
+app.include_router(polling_router)
 # NOTE: buffer_router is included but components must be set via set_buffer_components()
 # app.include_router(buffer_router)  # Uncomment when buffer/writer are running
 

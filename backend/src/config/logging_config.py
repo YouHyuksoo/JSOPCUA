@@ -1,12 +1,20 @@
 """
 Logging Configuration for SCADA System
 
-폴링 로그 설정:
-- 일반 로그: logs/scada.log (INFO 레벨)
-- 에러 로그: logs/error.log (ERROR 레벨)
-- 통신 로그: logs/communication.log (PLC 통신 전용)
-- 성능 로그: logs/performance.log (폴링 성능 메트릭)
+폴링 로그 설정 (일자별 로테이션):
+- 일반 로그: logs/scada.log (INFO 레벨) - 자정마다 scada.log.YYYYMMDD로 백업
+- 에러 로그: logs/error.log (ERROR 레벨) - 자정마다 error.log.YYYYMMDD로 백업
+- 통신 로그: logs/communication.log (PLC 통신 전용) - 자정마다 백업
+- 성능 로그: logs/performance.log (폴링 성능 메트릭) - 자정마다 백업
+- PLC 로그: logs/plc.log (PLC 관련) - 자정마다 백업
+- 폴링 로그: logs/polling.log (폴링 엔진) - 자정마다 백업
+- Oracle 로그: logs/oracle_writer.log (Oracle 연동) - 자정마다 백업
 - 실패 로그: logs/polling_failures/YYYYMMDD/*.log (일자별 폴더)
+
+로그 로테이션:
+- 자정(midnight)마다 자동 로테이션
+- 백업 파일명 형식: {파일명}.YYYYMMDD (예: scada.log.20250112)
+- 최대 백업 개수: LOG_BACKUP_COUNT (기본값: 10일)
 
 터미널 로그 레벨 설정:
 - 환경변수 LOG_LEVEL로 제어 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -173,14 +181,16 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     print(f"[Logging] Colors enabled: {use_colors}")
 
     # =========================================================================
-    # 2. General Log File (scada.log) - INFO 레벨
+    # 2. General Log File (scada.log) - INFO 레벨 (일자별 로테이션)
     # =========================================================================
-    general_handler = logging.handlers.RotatingFileHandler(
+    general_handler = logging.handlers.TimedRotatingFileHandler(
         filename=log_path / "scada.log",
-        maxBytes=settings.LOG_MAX_BYTES,
+        when='midnight',  # 자정마다 로테이션
+        interval=1,       # 1일마다
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
+    general_handler.suffix = "%Y%m%d"  # 백업 파일명: scada.log.20250112
     general_handler.setLevel(logging.INFO)
     general_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
@@ -190,14 +200,16 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     root_logger.addHandler(general_handler)
 
     # =========================================================================
-    # 3. Error Log File (error.log) - ERROR 레벨만
+    # 3. Error Log File (error.log) - ERROR 레벨만 (일자별 로테이션)
     # =========================================================================
-    error_handler = logging.handlers.RotatingFileHandler(
+    error_handler = logging.handlers.TimedRotatingFileHandler(
         filename=log_path / "error.log",
-        maxBytes=settings.LOG_MAX_BYTES,
+        when='midnight',
+        interval=1,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
+    error_handler.suffix = "%Y%m%d"
     error_handler.setLevel(logging.ERROR)
     error_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d\n%(message)s\n',
@@ -207,15 +219,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     root_logger.addHandler(error_handler)
 
     # =========================================================================
-    # 4. Communication Log (communication.log) - PLC 통신 전용
+    # 4. Communication Log (communication.log) - PLC 통신 전용 (일자별 로테이션)
     # =========================================================================
     comm_logger = logging.getLogger('pymcprotocol')
-    comm_handler = logging.handlers.RotatingFileHandler(
+    comm_handler = logging.handlers.TimedRotatingFileHandler(
         filename=log_path / "communication.log",
-        maxBytes=settings.LOG_MAX_BYTES,
+        when='midnight',
+        interval=1,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
+    comm_handler.suffix = "%Y%m%d"
     comm_handler.setLevel(logging.DEBUG)
     comm_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | PLC=%(message)s',
@@ -227,15 +241,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     comm_logger.propagate = False  # 상위 로거로 전파하지 않음
 
     # =========================================================================
-    # 5. Performance Log (performance.log) - 폴링 성능 메트릭
+    # 5. Performance Log (performance.log) - 폴링 성능 메트릭 (일자별 로테이션)
     # =========================================================================
     perf_logger = logging.getLogger('polling.performance')
-    perf_handler = logging.handlers.RotatingFileHandler(
+    perf_handler = logging.handlers.TimedRotatingFileHandler(
         filename=log_path / "performance.log",
-        maxBytes=settings.LOG_MAX_BYTES,
+        when='midnight',
+        interval=1,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
+    perf_handler.suffix = "%Y%m%d"
     perf_handler.setLevel(logging.INFO)
     perf_formatter = logging.Formatter(
         fmt='%(asctime)s | %(message)s',
@@ -245,6 +261,72 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     perf_logger.addHandler(perf_handler)
     perf_logger.setLevel(logging.INFO)
     perf_logger.propagate = False
+
+    # =========================================================================
+    # 6. PLC Log (plc.log) - PLC 관련 로그 (일자별 로테이션)
+    # =========================================================================
+    plc_logger = logging.getLogger('plc')
+    plc_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=log_path / "plc.log",
+        when='midnight',
+        interval=1,
+        backupCount=settings.LOG_BACKUP_COUNT,
+        encoding='utf-8'
+    )
+    plc_handler.suffix = "%Y%m%d"
+    plc_handler.setLevel(logging.INFO)
+    plc_formatter = logging.Formatter(
+        fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    plc_handler.setFormatter(plc_formatter)
+    plc_logger.addHandler(plc_handler)
+    plc_logger.setLevel(logging.INFO)
+    plc_logger.propagate = False
+
+    # =========================================================================
+    # 7. Polling Log (polling.log) - 폴링 엔진 로그 (일자별 로테이션)
+    # =========================================================================
+    polling_logger = logging.getLogger('polling')
+    polling_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=log_path / "polling.log",
+        when='midnight',
+        interval=1,
+        backupCount=settings.LOG_BACKUP_COUNT,
+        encoding='utf-8'
+    )
+    polling_handler.suffix = "%Y%m%d"
+    polling_handler.setLevel(logging.INFO)
+    polling_formatter = logging.Formatter(
+        fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    polling_handler.setFormatter(polling_formatter)
+    polling_logger.addHandler(polling_handler)
+    polling_logger.setLevel(logging.INFO)
+    polling_logger.propagate = False
+
+    # =========================================================================
+    # 8. Oracle Writer Log (oracle_writer.log) - Oracle 연동 로그 (일자별 로테이션)
+    # =========================================================================
+    oracle_logger = logging.getLogger('oracle_writer')
+    oracle_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=log_path / "oracle_writer.log",
+        when='midnight',
+        interval=1,
+        backupCount=settings.LOG_BACKUP_COUNT,
+        encoding='utf-8'
+    )
+    oracle_handler.suffix = "%Y%m%d"
+    oracle_handler.setLevel(logging.INFO)
+    oracle_formatter = logging.Formatter(
+        fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
+    oracle_handler.setFormatter(oracle_formatter)
+    oracle_logger.addHandler(oracle_handler)
+    oracle_logger.setLevel(logging.INFO)
+    oracle_logger.propagate = False
 
     logging.info(f"Logging configured: log_dir={log_path.absolute()}")
 
@@ -329,3 +411,20 @@ def set_console_log_level(level: int):
             return
 
     logging.warning("Console handler not found, cannot change log level")
+
+
+def get_logger(name: str) -> logging.Logger:
+    """
+    모듈별 로거 인스턴스 가져오기
+
+    Args:
+        name: 로거 이름 (일반적으로 __name__ 사용)
+
+    Returns:
+        logging.Logger: 로거 인스턴스
+
+    Examples:
+        logger = get_logger(__name__)
+        logger.info("Hello, World!")
+    """
+    return logging.getLogger(name)

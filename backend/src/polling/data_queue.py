@@ -74,7 +74,7 @@ class DataQueue:
             logger.debug(f"Data retrieved from queue: group={data.group_name}, remaining={self.size()}")
             return data
         except queue.Empty:
-            logger.warning("Queue is empty, no data available")
+            logger.debug("Queue is empty, no data available")
             raise
 
     def get_nowait(self) -> PollingData:

@@ -3,8 +3,8 @@
 # 실행: bash scripts/backup_sqlite.sh
 
 # 백업 디렉토리
-BACKUP_DIR="./backups"
-DB_FILE="./config/scada.db"
+BACKUP_DIR="./backup"
+DB_FILE="./data/scada.db"
 
 # 백업 디렉토리 생성
 mkdir -p "$BACKUP_DIR"

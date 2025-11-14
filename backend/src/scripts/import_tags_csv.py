@@ -271,7 +271,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     csv_file = sys.argv[1]
-    db_path = project_root / "config" / "scada.db"
+    db_path = project_root / "data" / "scada.db"
 
     logger.info("Starting CSV import...")
     logger.info(f"CSV file: {csv_file}")

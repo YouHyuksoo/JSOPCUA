@@ -35,6 +35,7 @@ class PollingGroup:
         plc_code: PLC code to connect to
         mode: Polling mode (FIXED or HANDSHAKE)
         interval_ms: Polling interval in milliseconds (FIXED mode only)
+        group_category: Oracle table category (OPERATION or ALARM)
         is_active: Whether the group is active
         tag_addresses: List of tag addresses to poll
     """
@@ -43,6 +44,7 @@ class PollingGroup:
     plc_code: str
     mode: PollingMode
     interval_ms: Optional[int] = None
+    group_category: str = "OPERATION"
     is_active: bool = True
     tag_addresses: List[str] = field(default_factory=list)
 
@@ -57,6 +59,10 @@ class PollingGroup:
         if not self.tag_addresses:
             raise ValueError(f"Polling group {self.group_name} has no tag addresses")
 
+        # Validate group_category
+        if self.group_category not in ("OPERATION", "STATE", "ALARM"):
+            raise ValueError(f"Invalid group_category: {self.group_category}. Must be OPERATION, STATE, or ALARM")
+
 
 @dataclass
 class PollingData:
@@ -69,6 +75,7 @@ class PollingData:
         group_name: Polling group name
         plc_code: PLC code that was polled
         mode: Polling mode used
+        group_category: Oracle table category (OPERATION or ALARM)
         tag_values: Dict of tag address → value
         poll_time_ms: Time taken to complete poll (milliseconds)
         error_tags: Dict of tag address → error message (if any)
@@ -78,6 +85,7 @@ class PollingData:
     group_name: str
     plc_code: str
     mode: PollingMode
+    group_category: str = "OPERATION"
     tag_values: Dict[str, Any] = field(default_factory=dict)
     poll_time_ms: float = 0.0
     error_tags: Dict[str, str] = field(default_factory=dict)
@@ -90,6 +98,7 @@ class PollingData:
             "group_name": self.group_name,
             "plc_code": self.plc_code,
             "mode": self.mode.value,
+            "group_category": self.group_category,
             "tag_values": self.tag_values,
             "poll_time_ms": self.poll_time_ms,
             "error_tags": self.error_tags

@@ -12,6 +12,8 @@ import {
   PlayCircle,
   FileText,
   Activity,
+  Settings,
+  Layout,
 } from "lucide-react"
 
 const navigation = [
@@ -22,7 +24,9 @@ const navigation = [
   { name: "Tags", href: "/tags", icon: Tags },
   { name: "Polling Groups", href: "/polling-groups", icon: PlayCircle },
   { name: "Polling Monitor", href: "/polling-ws", icon: Activity },
+  { name: "모니터 레이아웃", href: "/monitor-layout", icon: Layout },
   { name: "Logs", href: "/logs", icon: FileText },
+  { name: "시스템 설정", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar() {

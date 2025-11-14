@@ -5,7 +5,7 @@ Feature 5: Database Management REST API
 Provides CRUD operations for PLC tags including CSV bulk import
 """
 
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, status, UploadFile, File
 from src.database.sqlite_manager import SQLiteManager
 from .models import TagCreate, TagUpdate, TagResponse, TagImportResult, PaginatedResponse
@@ -52,14 +52,19 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
     if tag.polling_group_id is not None:
         validate_polling_group_exists(db, tag.polling_group_id)
 
+    # 태그명이 "unknown"이면 is_active를 'N'으로 설정
+    is_active = tag.enabled
+    if tag.tag_name and tag.tag_name.lower() == "unknown":
+        is_active = False
+
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO tags (
                 plc_id, polling_group_id, tag_address, tag_name, tag_type,
-                unit, scale, machine_code, description, is_active
+                unit, scale, machine_code, log_mode, description, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             tag.plc_id,
             tag.polling_group_id,
@@ -69,8 +74,9 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
             tag.unit,
             tag.scale,
             tag.machine_code,
+            tag.log_mode,  # log_mode
             tag.tag_division,  # description
-            tag.enabled  # is_active
+            is_active  # is_active (unknown이면 False)
         ))
         conn.commit()
         tag_id = cursor.lastrowid
@@ -88,9 +94,11 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
 
 @router.get("", response_model=PaginatedResponse[TagResponse])
 def list_tags(
-    plc_id: int = None,
-    process_id: int = None,
-    polling_group_id: int = None,
+    plc_id: Optional[int] = None,
+    process_id: Optional[int] = None,
+    polling_group_id: Optional[int] = None,
+    tag_category: Optional[str] = None,
+    is_active: Optional[bool] = None,
     pagination: PaginationParams = Depends(),
     db: SQLiteManager = Depends(get_db)
 ):
@@ -100,6 +108,8 @@ def list_tags(
     - **plc_id**: Optional filter by PLC ID
     - **process_id**: Optional filter by process ID
     - **polling_group_id**: Optional filter by polling group ID
+    - **tag_category**: Optional filter by tag category (tag type)
+    - **is_active**: Optional filter by active status (true/false)
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 50, max: 1000)
 
@@ -110,30 +120,40 @@ def list_tags(
     params = []
 
     if plc_id:
-        conditions.append("plc_id = ?")
+        conditions.append("t.plc_id = ?")
         params.append(plc_id)
     if process_id:
-        conditions.append("process_id = ?")
+        conditions.append("t.process_id = ?")
         params.append(process_id)
     if polling_group_id:
-        conditions.append("polling_group_id = ?")
+        conditions.append("t.polling_group_id = ?")
         params.append(polling_group_id)
+    if tag_category:
+        conditions.append("t.tag_category = ?")
+        params.append(tag_category)
+    if is_active is not None:
+        conditions.append("t.is_active = ?")
+        params.append(1 if is_active else 0)
 
     where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
     # Get total count
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM tags {where_clause}", params)
+        cursor.execute(f"SELECT COUNT(*) FROM tags t {where_clause}", params)
         total_count = cursor.fetchone()[0]
 
-    # Get paginated tags
+    # Get paginated tags with PLC code
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT * FROM tags
+            SELECT
+                t.*,
+                p.plc_code
+            FROM tags t
+            LEFT JOIN plc_connections p ON t.plc_id = p.id
             {where_clause}
-            ORDER BY id DESC
+            ORDER BY t.id DESC
             LIMIT ? OFFSET ?
         """, params + [pagination.limit, pagination.skip])
         rows = cursor.fetchall()
@@ -146,6 +166,213 @@ def list_tags(
         items=tags,
         **metadata
     )
+
+
+# ==============================================================================
+# GET /api/tags/tag-categories - Get distinct tag categories
+# ==============================================================================
+
+@router.get("/tag-categories")
+def get_tag_categories(db: SQLiteManager = Depends(get_db)):
+    """
+    Get list of distinct tag categories (tag types) from database
+
+    Returns list of unique tag_category values for filter dropdown
+    """
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT tag_category
+            FROM tags
+            WHERE tag_category IS NOT NULL AND tag_category != ''
+            ORDER BY tag_category
+        """)
+        rows = cursor.fetchall()
+
+    categories = [row[0] for row in rows]
+    return {"categories": categories}
+
+
+# ==============================================================================
+# Oracle Synchronization APIs (MUST be before /{tag_id} route)
+# ==============================================================================
+
+@router.get("/oracle-connection-info")
+def get_oracle_connection_info():
+    """
+    Get Oracle database connection information (without password)
+
+    Returns connection details for Oracle sync confirmation dialog
+    """
+    try:
+        from src.oracle_writer.config import load_config_from_env
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        config = load_config_from_env()
+        return config.to_dict()
+    except Exception as e:
+        from fastapi import HTTPException
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        logger.error(f"Failed to load Oracle config: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load Oracle configuration: {str(e)}"
+        )
+
+
+@router.post("/sync-from-oracle")
+def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
+    """
+    Synchronize tags from Oracle ICOM_PLC_TAG_MASTER table to SQLite tags
+
+    매핑: ICOM_PLC_TAG_MASTER (Oracle) → tags (SQLite)
+
+    This endpoint:
+    1. Fetches all active tags (TAG_USE_YN='Y') from Oracle ICOM_PLC_TAG_MASTER
+    2. For each Oracle tag:
+       - Looks up plc_id from plc_code
+       - Looks up process_id from machine_code
+       - If tag exists (by plc_id + tag_address): UPDATE
+       - If tag doesn't exist: INSERT
+    3. Returns sync statistics
+
+    Returns:
+        {
+            "success": true,
+            "total_oracle_tags": 100,
+            "created": 50,
+            "updated": 30,
+            "skipped": 20,
+            "errors": 0,
+            "error_details": []
+        }
+    """
+    from src.oracle_writer.oracle_helper import get_oracle_tags
+    from src.config.logging_config import get_logger
+    from fastapi import HTTPException
+
+    logger = get_logger(__name__)
+
+    try:
+        # Fetch tags from Oracle
+        logger.info("Starting Oracle tag synchronization...")
+        oracle_tags = get_oracle_tags()
+        logger.info(f"Fetched {len(oracle_tags)} tags from Oracle")
+
+        # Build lookup dictionaries
+        plc_lookup = _build_plc_lookup(db)
+        process_lookup = _build_process_lookup(db)
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+        error_count = 0
+        error_details = []
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            for oracle_tag in oracle_tags:
+                plc_code = oracle_tag['plc_code']
+                machine_code = oracle_tag.get('machine_code')
+                tag_address = oracle_tag['tag_address']
+                tag_name = oracle_tag['tag_name'] or 'UNKNOWN'  # NULL 값을 'UNKNOWN'으로 대체
+                tag_category = oracle_tag.get('tag_category')  # Oracle TAG_TYPE → tag_category
+                tag_type = oracle_tag['tag_type']  # Oracle TAG_DATA_TYPE → tag_type
+                unit = oracle_tag.get('unit', '')
+                scale = oracle_tag.get('scale', 1.0)
+                min_value = oracle_tag.get('min_value')
+                max_value = oracle_tag.get('max_value')
+
+                try:
+                    # Lookup plc_id
+                    plc_id = plc_lookup.get(plc_code)
+                    if not plc_id:
+                        error_count += 1
+                        error_msg = f"PLC not found for tag {tag_address}: {plc_code}"
+                        error_details.append(error_msg)
+                        logger.warning(error_msg)
+                        continue
+
+                    # Lookup process_id (optional)
+                    process_id = process_lookup.get(machine_code) if machine_code else None
+
+                    # Check if tag exists
+                    cursor.execute(
+                        "SELECT id FROM tags WHERE plc_id = ? AND tag_address = ?",
+                        (plc_id, tag_address)
+                    )
+                    existing = cursor.fetchone()
+
+                    # 태그명이 "unknown"이면 is_active=0, 아니면 1
+                    is_active = 0 if tag_name.lower() == "unknown" else 1
+
+                    if existing:
+                        # UPDATE existing tag
+                        cursor.execute("""
+                            UPDATE tags
+                            SET tag_name = ?,
+                                tag_category = ?,
+                                tag_type = ?,
+                                unit = ?,
+                                scale = ?,
+                                min_value = ?,
+                                max_value = ?,
+                                process_id = ?,
+                                is_active = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE plc_id = ? AND tag_address = ?
+                        """, (tag_name, tag_category, tag_type, unit, scale, min_value, max_value,
+                              process_id, is_active, plc_id, tag_address))
+                        updated_count += 1
+                        logger.debug(f"Updated tag: {plc_code}/{tag_address}")
+
+                    else:
+                        # INSERT new tag
+                        cursor.execute("""
+                            INSERT INTO tags
+                            (plc_id, process_id, tag_address, tag_name, tag_category, tag_type,
+                             unit, scale, min_value, max_value, is_active)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (plc_id, process_id, tag_address, tag_name, tag_category, tag_type,
+                              unit, scale, min_value, max_value, is_active))
+                        created_count += 1
+                        logger.debug(f"Created tag: {plc_code}/{tag_address}")
+
+                except Exception as e:
+                    error_count += 1
+                    error_msg = f"Error processing tag {plc_code}/{tag_address}: {str(e)}"
+                    error_details.append(error_msg)
+                    logger.error(error_msg)
+                    continue
+
+            # Commit all changes
+            conn.commit()
+
+        logger.info(
+            f"Tag sync completed: {created_count} created, "
+            f"{updated_count} updated, {error_count} errors"
+        )
+
+        return {
+            "success": True,
+            "total_oracle_tags": len(oracle_tags),
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error_details": error_details
+        }
+
+    except Exception as e:
+        logger.error(f"Oracle tag sync failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync tags from Oracle: {str(e)}"
+        )
 
 
 # ==============================================================================
@@ -163,7 +390,14 @@ def get_tag(tag_id: int, db: SQLiteManager = Depends(get_db)):
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM tags WHERE id = ?", (tag_id,))
+        cursor.execute("""
+            SELECT
+                t.*,
+                p.plc_code
+            FROM tags t
+            LEFT JOIN plc_connections p ON t.plc_id = p.id
+            WHERE t.id = ?
+        """, (tag_id,))
         row = cursor.fetchone()
 
     if not row:
@@ -215,6 +449,11 @@ def update_tag(
         updates.append("tag_name = ?")
         params.append(tag_update.tag_name)
 
+        # 태그명이 "unknown"이면 is_active를 False로 설정
+        if tag_update.tag_name.lower() == "unknown":
+            updates.append("is_active = ?")
+            params.append(False)
+
     if tag_update.tag_division is not None:
         updates.append("description = ?")
         params.append(tag_update.tag_division)
@@ -235,9 +474,17 @@ def update_tag(
         updates.append("polling_group_id = ?")
         params.append(tag_update.polling_group_id)
 
+    if tag_update.log_mode is not None:
+        updates.append("log_mode = ?")
+        params.append(tag_update.log_mode)
+
     if tag_update.enabled is not None:
-        updates.append("is_active = ?")
-        params.append(tag_update.enabled)
+        # tag_name이 "unknown"이면 enabled 무시
+        if tag_update.tag_name and tag_update.tag_name.lower() == "unknown":
+            pass  # is_active는 이미 False로 설정됨
+        else:
+            updates.append("is_active = ?")
+            params.append(tag_update.enabled)
 
     if not updates:
         # No changes, return current tag
@@ -413,6 +660,10 @@ async def import_tags_csv(
                     machine_code = str(row.get('MACHINE_CODE', '')).strip() or None
                     enabled = int(row.get('ENABLED', 1))
 
+                    # 태그명이 "unknown"이면 is_active=0으로 설정
+                    if tag_name.lower() == "unknown":
+                        enabled = 0
+
                     batch_data.append((
                         plc_id, None, tag_address, tag_name, data_type,
                         unit, scale, machine_code, tag_division, enabled
@@ -480,20 +731,22 @@ async def import_tags_csv(
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse"""
-    # Row format: (id, plc_id, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
+    # Row format: (id, plc_id, process_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, polling_group_id, description, is_active, last_value, last_updated_at, created_at, updated_at, tag_category, plc_code)
     return TagResponse(
         id=row[0],
         plc_id=row[1],
-        process_id=0,  # Not in DB - use default
+        process_id=row[2] if row[2] else 0,
         tag_address=row[3],
         tag_name=row[4],
         tag_division=row[12] if row[12] else '',  # description
+        tag_category=row[18] if len(row) > 18 and row[18] else None,  # tag_category
         data_type=row[5],  # tag_type
-        unit=str(row[6]) if row[6] else None,  # Convert to string if not None
+        unit=str(row[6]) if row[6] else None,
         scale=float(row[7]) if row[7] is not None else 1.0,
-        machine_code=row[11],
-        polling_group_id=row[2],
+        machine_code=None,  # Not in current schema
+        polling_group_id=row[11],
         enabled=bool(row[13]),  # is_active
+        plc_code=row[19] if len(row) > 19 and row[19] else None,  # plc_code from JOIN
         created_at=row[16] if row[16] else datetime.now().isoformat(),
         updated_at=row[17] if row[17] else datetime.now().isoformat()
     )

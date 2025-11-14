@@ -5,8 +5,8 @@ export const processSchema = z.object({
   process_sequence: z.number().int().positive('공정 순서는 필수입니다'),
   process_code: z.string().min(14, '공정 코드는 14자여야 합니다').max(14, '공정 코드는 14자여야 합니다'),
   process_name: z.string().min(1, '공정 이름은 필수입니다').max(200, '공정 이름은 200자 이하여야 합니다'),
+  enabled: z.boolean(),
   equipment_type: z.string().max(100, '설비 타입은 100자 이하여야 합니다').optional(),
-  enabled: z.boolean().default(true),
 });
 
 export type ProcessFormData = z.infer<typeof processSchema>;

@@ -114,7 +114,7 @@ class PollingEngine:
             # Load polling groups with PLC info
             cursor.execute("""
                 SELECT pg.id, pg.group_name, pg.polling_mode, pg.polling_interval_ms,
-                       pg.is_active, pg.plc_id, pc.plc_code
+                       pg.group_category, pg.is_active, pg.plc_id, pc.plc_code
                 FROM polling_groups pg
                 LEFT JOIN plc_connections pc ON pg.plc_id = pc.id
                 ORDER BY pg.id
@@ -157,11 +157,12 @@ class PollingEngine:
                         plc_code=plc_code,
                         mode=PollingMode(row['polling_mode']),
                         interval_ms=row['polling_interval_ms'],
+                        group_category=row['group_category'] if row['group_category'] else 'OPERATION',
                         is_active=bool(row['is_active']),
                         tag_addresses=tag_addresses
                     )
                     groups.append(group)
-                    logger.debug(f"Loaded group {group.group_name}: {len(tag_addresses)} tags, PLC={plc_code}")
+                    logger.debug(f"Loaded group {group.group_name}: {len(tag_addresses)} tags, PLC={plc_code}, category={group.group_category}")
 
                 except ValueError as e:
                     logger.error(f"Invalid polling group configuration for {row['group_name']}: {e}")

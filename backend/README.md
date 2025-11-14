@@ -5,7 +5,7 @@ Python 백엔드 애플리케이션 - Mitsubishi PLC 데이터 수집 및 폴링
 ## 기능
 
 ### Feature 1: 프로젝트 구조 및 SQLite 데이터베이스
-- SQLite 파일 기반 데이터베이스 (`backend/config/scada.db`)
+- SQLite 파일 기반 데이터베이스 (`backend/data/scada.db`)
 - 라인, 공정, PLC 연결, 태그, 폴링 그룹 테이블
 - 14자리 설비 코드 체계 지원
 - CSV 일괄 등록 기능

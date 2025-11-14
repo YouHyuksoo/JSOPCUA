@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPollingGroups, startPollingGroup, stopPollingGroup } from '@/lib/api/polling-groups';
+import { getPollingGroups, startPollingGroup, stopPollingGroup, deletePollingGroup } from '@/lib/api/polling-groups';
 import { PollingGroup } from '@/lib/types/polling-group';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import DeleteDialog from '@/components/DeleteDialog';
 import { toast } from 'sonner';
 
 export default function PollingGroupsPage() {
   const [groups, setGroups] = useState<PollingGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const fetchGroups = async () => {
     try {
@@ -28,9 +30,12 @@ export default function PollingGroupsPage() {
 
   const handleStart = async (id: number) => {
     try {
-      await startPollingGroup(id);
-      toast.success('폴링 시작됨');
-      fetchGroups();
+      const result = await startPollingGroup(id);
+      toast.success(result.message);
+      // 로컬 상태 업데이트
+      setGroups(groups.map(g =>
+        g.id === id ? { ...g, status: 'running' as const } : g
+      ));
     } catch (error) {
       toast.error('폴링 시작 실패');
     }
@@ -38,11 +43,26 @@ export default function PollingGroupsPage() {
 
   const handleStop = async (id: number) => {
     try {
-      await stopPollingGroup(id);
-      toast.success('폴링 중지됨');
-      fetchGroups();
+      const result = await stopPollingGroup(id);
+      toast.success(result.message);
+      // 로컬 상태 업데이트
+      setGroups(groups.map(g =>
+        g.id === id ? { ...g, status: 'stopped' as const } : g
+      ));
     } catch (error) {
       toast.error('폴링 중지 실패');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteId) return;
+    try {
+      await deletePollingGroup(deleteId);
+      toast.success('폴링 그룹이 삭제되었습니다');
+      setDeleteId(null);
+      fetchGroups();
+    } catch (error) {
+      toast.error('폴링 그룹 삭제 실패');
     }
   };
 
@@ -68,6 +88,7 @@ export default function PollingGroupsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">이름</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">주기(ms)</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">태그 수</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">상태</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">작업</th>
               </tr>
@@ -77,7 +98,13 @@ export default function PollingGroupsPage() {
                 <tr key={group.id} className="hover:bg-gray-800/50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{group.name}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.polling_interval_ms}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.polling_interval} ms</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="text-blue-400 font-medium">{group.tag_count}</span>
+                      <span className="text-gray-500">개</span>
+                    </span>
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 py-1 text-xs rounded border ${
                       group.status === 'running'
@@ -88,14 +115,29 @@ export default function PollingGroupsPage() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                    {group.status === 'running' ? (
-                      <Button size="sm" variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/20" onClick={() => handleStop(group.id)}>중지</Button>
-                    ) : (
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleStart(group.id)}>시작</Button>
-                    )}
+                    <Button
+                      size="sm"
+                      className="bg-green-600 hover:bg-green-700"
+                      onClick={() => handleStart(group.id)}
+                      disabled={group.status === 'running'}
+                    >
+                      시작
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="bg-red-500/10 text-red-500 hover:bg-red-500/20"
+                      onClick={() => handleStop(group.id)}
+                      disabled={group.status === 'stopped'}
+                    >
+                      중지
+                    </Button>
                     <Link href={`/polling-groups/${group.id}`}>
                       <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">편집</Button>
                     </Link>
+                    <Button size="sm" variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/20" onClick={() => setDeleteId(group.id)}>
+                      삭제
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -103,6 +145,11 @@ export default function PollingGroupsPage() {
           </table>
         </div>
       </div>
+      <DeleteDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

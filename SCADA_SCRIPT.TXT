@@ -1,0 +1,2697 @@
+// 시간데이터 생성
+(function(){
+    Date.prototype.format = function(f) {
+   if (!this.valueOf()) return " ";
+ 
+//   var weekName = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+   var weekName = ["일", "월", "화", "수", "목", "금", "토"];
+   var d = this;
+    
+   return f.replace(/(yyyy|yy|MM|dd|E|hh|mm|ss|a\/p)/gi, function($1) {
+      switch ($1) {
+         case "yyyy": return d.getFullYear();
+         case "yy": return (d.getFullYear() % 1000).zf(2);
+         case "MM": return (d.getMonth() + 1).zf(2);
+         case "dd": return d.getDate().zf(2);
+         case "E": return weekName[d.getDay()];
+         case "HH": return d.getHours().zf(2);
+         case "hh": return ((h = d.getHours() % 12) ? h : 12).zf(2);
+         case "mm": return d.getMinutes().zf(2);
+         case "ss": return d.getSeconds().zf(2);
+         case "a/p": return d.getHours() < 12 ? "AM" : "PM";
+         default: return $1;
+      }
+   });
+};
+ 
+String.prototype.string = function(len){var s = '', i = 0; while (i++ < len) { s += this; } return s;};
+String.prototype.zf = function(len){return "0".string(len - this.length) + this;};
+Number.prototype.zf = function(len){return this.toString().zf(len);};
+
+function updateDateTime()
+{
+    var d = new Date;
+    $XT("TIME").value = d.format("yyyy/MM/dd HH:mm:ss");
+    $XT("B0001").value = d.format("HH");
+    $XT("B0002").value = d.format("mm");
+}
+
+setInterval(updateDateTime, 1000);    // 작화 화면 시간 갱신(1초)
+    
+})();
+
+// 초기화 bit 신호 넣기
+(function(){
+    $XT("B0002").addEventListener('change',set)
+
+    function set(event){
+        if($XT("B0001").value == '07'){
+            if($XT("B0002").value == '30'){
+                console.log("초기화");
+                $XT("PLC01.RESET").value = true;
+                $XT("PLC02.RESET").value = true;
+                $XT("PLC03.RESET").value = true;
+                
+                setTimeout(function reset(){
+                    console.log("초기화 완료");
+                    $XT("PLC01.RESET").value = false;
+                    $XT("PLC02.RESET").value = false;
+                    $XT("PLC03.RESET").value = false;
+                },5000)   
+            }
+        }
+    }
+})();
+       
+/////////// DB 조회
+if (typeof $extend == "undefined") $extend = {};
+(function () {
+	function DbExecutor(dbName, queryName, parameters, onSuccess, onFailed) {
+		this.dbName = dbName;
+		this.queryName = queryName;
+		this.parameters = parameters;
+		this.onSuccess = typeof(onSuccess) == "function" ? onSuccess : null;
+		this.onFailed = typeof(onFailed) == "function" ? onFailed : null;
+		this.interval = 0;
+		this.timerId = 0;
+		this.running = false;
+
+		// 실행한다.
+		this.myExecute = function () {
+			//console.log(this);
+
+			// 이미 실행중인가?
+			if (this.running == true) return;
+
+			// DB에 요청한다.
+			try {
+				this.running = true;
+
+				// callback 함수의 this는 무조건 전역 개체가 되므로 bind()를 사용한다.
+				var onSuccess = myOnSuccess;
+				var onFailed = myOnFailed;
+				$XD(this.dbName).execute(this.queryName, this.parameters, onSuccess.bind(this), onFailed.bind(this));
+			} catch (e) {
+				this.running = false;
+				console.log("Can't execute: " + this.dbName + "." + this.queryName);
+			}
+		}
+
+		// 성공했을 경우
+		function myOnSuccess(data) {
+			//console.log(this);
+
+			if (this.onSuccess) {
+				try {
+					this.onSuccess(data);
+				} catch (e) {
+					// 에러 무시
+				}
+			}
+
+			this.running = false;
+		}
+
+		// 실패했을 경우
+		function myOnFailed(msg) {
+			//console.log(this);
+
+			if (this.onFailed) {
+				try {
+					this.onFailed(msg);
+				} catch (e) {
+					// 에러 무시
+				}
+			}
+
+			this.running = false;
+		}
+	}
+	
+	DbExecutor.prototype.start = function (interval, force) {
+		if (typeof(interval) != "number") return;
+		if (interval <= 0) return;
+		if (this.interval == interval) return; // 동일한 주기
+
+		force = (typeof(force) !== "undefined") ?  force : true;
+		//console.log("force: " + force);
+
+		// 기존 타이머 삭제
+		if (this.timerId > 0) {
+			clearInterval(this.timerId);
+			this.timerId = 0;
+		}
+
+		this.interval = interval;
+
+		// 처음에 바로 시작
+		if (force && this.running == false) {
+			this.myExecute();
+		}
+
+		// callback 함수의 this는 무조건 전역 개체가 되므로 bind()를 사용한다.
+		this.timerId = setInterval((function() {
+			//console.log(this);
+			if (this.timerId <= 0) return;
+
+			this.myExecute();
+		}).bind(this), interval);
+	}
+	
+	DbExecutor.prototype.stop = function () {
+		// 기존 타이머 삭제
+		if (this.timerId > 0) {
+			clearInterval(this.timerId);
+			this.timerId = 0;
+		}
+
+		this.interval = 0;
+	}	
+	
+	$extend.createDbExecutor = function (dbName, queryName, parameters, onSuccess, onFailed) {
+		var module = new DbExecutor(dbName, queryName, parameters, onSuccess, onFailed);
+		return module;
+	}
+
+}());
+
+// PIE 알람 조회
+(function () {
+    var utiltiy = "PIE";
+    var queryName = utiltiy;
+    var tagPrefix = "VIEW." + utiltiy;
+    
+    function InitDate(){
+        for(var i = 0; i < 5; i++) {
+            $XT(tagPrefix + ".machine_message_" + i).value = "";
+            $XT(tagPrefix + ".machine_time_" + i).value = "";
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitDate();
+        for(var i = 0; i < data.count; i++) {
+            var time = data[i].getValueByName("MACHINE_TIME"); 
+            var massage = data[i].getValueByName("MACHINE_MESSAGE"); 
+            
+            $XT(tagPrefix + ".machine_message_" + i).value = massage;
+            $XT(tagPrefix + ".machine_time_" + i).value = time;
+        }
+    }    
+
+    function OnError(msg) {
+        InitDate();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1000 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// PLC 알람 조회
+(function () {
+    var utiltiy = "PLC";
+    var queryName = utiltiy;
+    var tagPrefix = "VIEW." + utiltiy;
+    
+    function InitDate(){
+        for(var i = 0; i < 5; i++) {
+            $XT(tagPrefix + ".machine_message_" + i).value = "";
+            $XT(tagPrefix + ".machine_time_" + i).value = "";
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitDate();
+        for(var i = 0; i < data.count; i++) {
+            var time = data[i].getValueByName("MACHINE_TIME"); 
+            var massage = data[i].getValueByName("MACHINE_MESSAGE"); 
+            
+            $XT(tagPrefix + ".machine_message_" + i).value = massage;
+            $XT(tagPrefix + ".machine_time_" + i).value = time;
+        }
+    }    
+
+    function OnError(msg) {
+        InitDate();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1000 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+
+// 하단 최근 상태 조회
+(function () {
+    var utiltiy = "ALARM";
+    var queryName = utiltiy;
+    var tagPrefix = "VIEW." + utiltiy;
+
+    function InitDate(){
+        $XT(tagPrefix + ".stop").value = "";
+        $XT(tagPrefix + ".safe").value = "";
+        $XT(tagPrefix + ".worring").value = "";
+    }
+    
+    function OnSuccess(data) {
+        InitDate();
+        var stop = data[0].getValueByName("stop"); 
+        var safe = data[0].getValueByName("safe"); 
+        var worring = data[0].getValueByName("worring"); 
+        
+        $XT(tagPrefix + ".stop").value = stop;
+        $XT(tagPrefix + ".safe").value = safe;
+        $XT(tagPrefix + ".worring").value = worring;
+    
+    }    
+
+    function OnError(msg) {
+        InitDate();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1000 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 일반 조회 PAGE_1
+(function () {
+    var utiltiy = "E_N";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1020 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 일반 조회 PAGE_2
+(function () {
+    var utiltiy = "E_N";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1020 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 PIE 조회 PAGE_1
+(function () {
+    var utiltiy = "E_P";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1030 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 PIE 조회 PAGE_2
+(function () {
+    var utiltiy = "E_P";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1030 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 PRAICAM 조회 PAGE_1
+(function () {
+    var utiltiy = "E_A";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1040 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 PRAICAM 조회 PAGE_2
+(function () {
+    var utiltiy = "E_A";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1040 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 RMS 조회 PAGE_1
+(function () {
+    var utiltiy = "E_R";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1050 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 RMS 조회 PAGE_2
+(function () {
+    var utiltiy = "E_R";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1050 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 용접 조회 PAGE_1
+(function () {
+    var utiltiy = "E_Y";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1060 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 용접 조회 PAGE_2
+(function () {
+    var utiltiy = "E_Y";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1060 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 CT 조회 PAGE_1
+(function () {
+    var utiltiy = "CT";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1070 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 CT 조회 PAGE_2
+(function () {
+    var utiltiy = "CT";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1070 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 정지율 조회 PAGE_1
+(function () {
+    var utiltiy = "STOP";
+    var queryName = "PAGE_1." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_1." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1080 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+// 이상감지 정지율 조회 PAGE_2
+(function () {
+    var utiltiy = "STOP";
+    var queryName = "PAGE_2." + utiltiy;
+    var tagPrefix = "VIEW.PAGE_2." + utiltiy;
+
+    function InitData(){
+        for(var i = 0; i <= 16; i++){
+            $XT(tagPrefix + ".data_" + i).value = 0
+        }
+    }
+    
+    function OnSuccess(data) {
+        InitData();
+        for(var i = 0; i < data.getAt(0).count; i++) {
+            if(data.getAt(0).getValue(i) == null){
+                $XT(tagPrefix + ".data_" + i).value = 0;
+            }else{
+                $XT(tagPrefix + ".data_" + i).value = data.getAt(0).getValue(i);
+            }
+        }
+    }    
+
+    function OnError(msg) {
+        InitData();
+        console.log(queryName + " onFailed : " + msg);
+    } 
+	
+	var dbExecutor = $extend.createDbExecutor("oracle_1", queryName, null, OnSuccess, OnError);
+	var interval = 1080 * 60 * 1;       // 1분마다 실행
+	dbExecutor.start(interval); 
+}());
+
+//////////// 설비 OPERATION 데이터 저장
+// 통신 재접속 
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',PLC01)
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',PLC02)
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',PLC03)
+    
+    function PLC01(event){
+        $XT("PLC01.KRCWO12EANN107_E").value = false;
+        $XT("PLC01.KRCWO12EANN212_E").value = false
+        $XT("PLC01.KRCWO12EAST115_E").value = false
+        $XT("PLC01.KRCWO12EBEM113_E").value = false
+        $XT("PLC01.KRCWO12EDRY106_E").value = false
+        $XT("PLC01.KRCWO12EDRY211_E").value = false
+        $XT("PLC01.KRCWO12ELOA101_E").value = false
+        $XT("PLC01.KRCWO12ELOA202_E").value = false
+        $XT("PLC01.KRCWO12ELOA309_E").value = false
+        $XT("PLC01.KRCWO12EMOM105_E").value = false
+        $XT("PLC01.KRCWO12EMOM210_E").value = false
+        $XT("PLC01.KRCWO12EROB108_E").value = false
+        $XT("PLC01.KRCWO12EWEM103_E").value = false
+        $XT("PLC01.KRCWO12EWEM204_E").value = false
+        $XT("PLC01.KRCWO12EWEM314_E").value = false
+    }
+    
+    function PLC02(event){
+        $XT("PLC02.KRCWO12ECON124_E").value = false;
+        $XT("PLC02.KRCWO12EFLM118_E").value = false;
+        $XT("PLC02.KRCWO12EFLM222_E").value = false;
+        $XT("PLC02.KRCWO12EMOM316_E").value = false;
+        $XT("PLC02.KRCWO12EMOM420_E").value = false;
+        $XT("PLC02.KRCWO12ESEM119_E").value = false;
+        $XT("PLC02.KRCWO12ESEM223_E").value = false;
+        $XT("PLC02.KRCWO12ESMC117_E").value = false;
+        $XT("PLC02.KRCWO12ESMC221_E").value = false;
+    }
+    
+    function PLC03(event){
+        $XT("PLC03.KRCWO12ECON234_E").value = false;
+        $XT("PLC03.KRCWO12EFOR125_E").value = false;
+        $XT("PLC03.KRCWO12EFOR226_E").value = false;
+        $XT("PLC03.KRCWO12EMOM527_E").value = false;
+        $XT("PLC03.KRCWO12EMOM629_E").value = false;
+        $XT("PLC03.KRCWO12EMOM732_E").value = false;
+        $XT("PLC03.KRCWO12EWEM428_E").value = false;
+        $XT("PLC03.KRCWO12EWEM530_E").value = false;
+        $XT("PLC03.KRCWO12EWEM631_E").value = false;
+        $XT("PLC03.KRCWO12EWEM733_E").value = false;
+    }
+})();
+
+// 7-U/L 쿨링 KRCWO12EANN107
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EANN107)
+    $XT("PLC01.KRCWO12EANN107").addEventListener('change',KRCWO12EANN107) 
+    
+    function KRCWO12EANN107(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EANN107_S            
+            ,1000)
+    }
+
+    function KRCWO12EANN107_S(){
+        var tag = $XT("PLC01.KRCWO12EANN107");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EANN107 커밋")}, function(){console.log("KRCWO12EANN107 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EANN107 롤백")}, function(){console.log("KRCWO12EANN107 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+
+// 12-센터 쿨링 KRCWO12EANN212 
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EANN212)
+    $XT("PLC01.KRCWO12EANN212").addEventListener('change',KRCWO12EANN212) 
+    
+    function KRCWO12EANN212(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EANN212_S            
+            ,1000)
+    }
+
+    function KRCWO12EANN212_S(){
+        var tag = $XT("PLC01.KRCWO12EANN212");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EANN212 커밋")}, function(){console.log("KRCWO12EANN212 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EANN212 롤백")}, function(){console.log("KRCWO12EANN212 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 15-Tub 가조립 KRCWO12EAST115
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EAST115)
+    $XT("PLC01.KRCWO12EAST115").addEventListener('change',KRCWO12EAST115) 
+    
+    function KRCWO12EAST115(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EAST115_S            
+            ,1000)
+    }
+
+    function KRCWO12EAST115_S(){
+        var tag = $XT("PLC01.KRCWO12EAST115");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EAST115 커밋")}, function(){console.log("KRCWO12EAST115 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EAST115 롤백")}, function(){console.log("KRCWO12EAST115 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 13-U 밴딩 KRCWO12EBEM113
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EBEM113)
+    $XT("PLC01.KRCWO12EBEM113").addEventListener('change',KRCWO12EBEM113) 
+    
+    function KRCWO12EBEM113(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EBEM113_S            
+            ,1000)
+    }
+
+    function KRCWO12EBEM113_S(){
+        var tag = $XT("PLC01.KRCWO12EBEM113");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EBEM113 커밋")}, function(){console.log("KRCWO12EBEM113 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EBEM113 롤백")}, function(){console.log("KRCWO12EBEM113 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 6-U/L 가열로 KRCWO12EDRY106
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EDRY106)
+    $XT("PLC01.KRCWO12EDRY106").addEventListener('change',KRCWO12EDRY106) 
+    
+    function KRCWO12EDRY106(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EDRY106_S            
+            ,1000)
+    }
+
+    function KRCWO12EDRY106_S(){
+        var tag = $XT("PLC01.KRCWO12EDRY106");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EDRY106 커밋")}, function(){console.log("KRCWO12EDRY106 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EDRY106 롤백")}, function(){console.log("KRCWO12EDRY106 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 11-센터 가열로 KRCWO12EDRY211
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EDRY211)
+    $XT("PLC01.KRCWO12EDRY211").addEventListener('change',KRCWO12EDRY211) 
+    
+    function KRCWO12EDRY211(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EDRY211_S            
+            ,1000)
+    }
+
+    function KRCWO12EDRY211_S(){
+        var tag = $XT("PLC01.KRCWO12EDRY211");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EDRY211 커밋")}, function(){console.log("KRCWO12EDRY211 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EDRY211 롤백")}, function(){console.log("KRCWO12EDRY211 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 1-Upper 로딩 KRCWO12ELOA101
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12ELOA101)
+    $XT("PLC01.KRCWO12ELOA101").addEventListener('change',KRCWO12ELOA101) 
+    
+    function KRCWO12ELOA101(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ELOA101_S            
+            ,1000)
+    }
+
+    function KRCWO12ELOA101_S(){
+        var tag = $XT("PLC01.KRCWO12ELOA101");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA101 커밋")}, function(){console.log("KRCWO12ELOA101 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA101 롤백")}, function(){console.log("KRCWO12ELOA101 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 2-Lower 로딩 KRCWO12ELOA202
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12ELOA202)
+    $XT("PLC01.KRCWO12ELOA202").addEventListener('change',KRCWO12ELOA202) 
+    
+    function KRCWO12ELOA202(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ELOA202_S            
+            ,1000)
+    }
+
+    function KRCWO12ELOA202_S(){
+        var tag = $XT("PLC01.KRCWO12ELOA202");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA202 커밋")}, function(){console.log("KRCWO12ELOA202 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA202 롤백")}, function(){console.log("KRCWO12ELOA202 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 9-센터 로딩 KRCWO12ELOA309
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12ELOA309)
+    $XT("PLC01.KRCWO12ELOA309").addEventListener('change',KRCWO12ELOA309) 
+    
+    function KRCWO12ELOA309(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ELOA309_S            
+            ,1000)
+    }
+
+    function KRCWO12ELOA309_S(){
+        var tag = $XT("PLC01.KRCWO12ELOA309");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA309 커밋")}, function(){console.log("KRCWO12ELOA309 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ELOA309 롤백")}, function(){console.log("KRCWO12ELOA309 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 5-U/L 댐핑시트 공급 KRCWO12EMOM105
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EMOM105)
+    $XT("PLC01.KRCWO12EMOM105").addEventListener('change',KRCWO12EMOM105) 
+    
+    function KRCWO12EMOM105(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM105_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM105_S(){
+        var tag = $XT("PLC01.KRCWO12EMOM105");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM105 커밋")}, function(){console.log("KRCWO12EMOM105 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM105 롤백")}, function(){console.log("KRCWO12EMOM105 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 10-센터 댐핑시트 공급 KRCWO12EMOM210
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EMOM210)
+    $XT("PLC01.KRCWO12EMOM210").addEventListener('change',KRCWO12EMOM210) 
+    
+    function KRCWO12EMOM210(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM210_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM210_S(){
+        var tag = $XT("PLC01.KRCWO12EMOM210");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM210 커밋")}, function(){console.log("KRCWO12EMOM210 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM210 롤백")}, function(){console.log("KRCWO12EMOM210 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 8-실런트 로봇 KRCWO12EROB108
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EROB108)
+    $XT("PLC01.KRCWO12EROB108").addEventListener('change',KRCWO12EROB108) 
+    
+    function KRCWO12EROB108(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EROB108_S            
+            ,1000)
+    }
+
+    function KRCWO12EROB108_S(){
+        var tag = $XT("PLC01.KRCWO12EROB108");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EROB108 커밋")}, function(){console.log("KRCWO12EROB108 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EROB108 롤백")}, function(){console.log("KRCWO12EROB108 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 3-Upper 브라켓 용접 KRCWO12EWEM103
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EWEM103)
+    $XT("PLC01.KRCWO12EWEM103").addEventListener('change',KRCWO12EWEM103) 
+    
+    function KRCWO12EWEM103(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM103_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM103_S(){
+        var tag = $XT("PLC01.KRCWO12EWEM103");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM103 커밋")}, function(){console.log("KRCWO12EWEM103 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM103 롤백")}, function(){console.log("KRCWO12EWEM103 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 4-Lower 브라켓 용접 KRCWO12EWEM204
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EWEM204)
+    $XT("PLC01.KRCWO12EWEM204").addEventListener('change',KRCWO12EWEM204) 
+    
+    function KRCWO12EWEM204(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM204_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM204_S(){
+        var tag = $XT("PLC01.KRCWO12EWEM204");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM204 커밋")}, function(){console.log("KRCWO12EWEM204 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM204 롤백")}, function(){console.log("KRCWO12EWEM204 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 14-센터 Tub 브라켓 용접 KRCWO12EWEM314
+(function (){
+    $XT("_Devices.PLC01.IsActive").addEventListener('change',KRCWO12EWEM314)
+    $XT("PLC01.KRCWO12EWEM314").addEventListener('change',KRCWO12EWEM314) 
+    
+    function KRCWO12EWEM314(event){
+        if($XT("_Devices.PLC01.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM314_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM314_S(){
+        var tag = $XT("PLC01.KRCWO12EWEM314");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM314 커밋")}, function(){console.log("KRCWO12EWEM314 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM314 롤백")}, function(){console.log("KRCWO12EWEM314 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 24-시밍배출 C/V KRCWO12ECON124
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12ECON124)
+    $XT("PLC02.KRCWO12ECON124").addEventListener('change',KRCWO12ECON124) 
+    
+    function KRCWO12ECON124(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ECON124_S            
+            ,1000)
+    }
+
+    function KRCWO12ECON124_S(){
+        var tag = $XT("PLC02.KRCWO12ECON124");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ECON124 커밋")}, function(){console.log("KRCWO12ECON124 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ECON124 롤백")}, function(){console.log("KRCWO12ECON124 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 18-플렌징 1 KRCWO12EFLM118
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12EFLM118)
+    $XT("PLC02.KRCWO12EFLM118").addEventListener('change',KRCWO12EFLM118) 
+    
+    function KRCWO12EFLM118(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EFLM118_S            
+            ,1000)
+    }
+
+    function KRCWO12EFLM118_S(){
+        var tag = $XT("PLC02.KRCWO12EFLM118");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFLM118 커밋")}, function(){console.log("KRCWO12EFLM118 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFLM118 롤백")}, function(){console.log("KRCWO12EFLM118 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 22-플렌징 2 KRCWO12EFLM222
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12EFLM222)
+    $XT("PLC02.KRCWO12EFLM222").addEventListener('change',KRCWO12EFLM222) 
+    
+    function KRCWO12EFLM222(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EFLM222_S            
+            ,1000)
+    }
+
+    function KRCWO12EFLM222_S(){
+        var tag = $XT("PLC02.KRCWO12EFLM222");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFLM222 커밋")}, function(){console.log("KRCWO12EFLM222 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFLM222 롤백")}, function(){console.log("KRCWO12EFLM222 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 16-Shuttle 1 KRCWO12EMOM316
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12EMOM316)
+    $XT("PLC02.KRCWO12EMOM316").addEventListener('change',KRCWO12EMOM316) 
+    
+    function KRCWO12EMOM316(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM316_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM316_S(){
+        var tag = $XT("PLC02.KRCWO12EMOM316");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM316 커밋")}, function(){console.log("KRCWO12EMOM316 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM316 롤백")}, function(){console.log("KRCWO12EMOM316 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 20-Shuttle 2 KRCWO12EMOM420
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12EMOM420)
+    $XT("PLC02.KRCWO12EMOM420").addEventListener('change',KRCWO12EMOM420) 
+    
+    function KRCWO12EMOM420(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM420_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM420_S(){
+        var tag = $XT("PLC02.KRCWO12EMOM420");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM420 커밋")}, function(){console.log("KRCWO12EMOM420 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM420 롤백")}, function(){console.log("KRCWO12EMOM420 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 19-레이저 실링 1 KRCWO12ESEM119
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12ESEM119)
+    $XT("PLC02.KRCWO12ESEM119").addEventListener('change',KRCWO12ESEM119) 
+    
+    function KRCWO12ESEM119(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ESEM119_S            
+            ,1000)
+    }
+
+    function KRCWO12ESEM119_S(){
+        var tag = $XT("PLC02.KRCWO12ESEM119");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESEM119 커밋")}, function(){console.log("KRCWO12ESEM119 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESEM119 롤백")}, function(){console.log("KRCWO12ESEM119 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 23-레이저 실링 2 KRCWO12ESEM223
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12ESEM223)
+    $XT("PLC02.KRCWO12ESEM223").addEventListener('change',KRCWO12ESEM223) 
+    
+    function KRCWO12ESEM223(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ESEM223_S            
+            ,1000)
+    }
+
+    function KRCWO12ESEM223_S(){
+        var tag = $XT("PLC02.KRCWO12ESEM223");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESEM223 커밋")}, function(){console.log("KRCWO12ESEM223 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESEM223 롤백")}, function(){console.log("KRCWO12ESEM223 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 17-시밍 1 KRCWO12ESMC117
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12ESMC117)
+    $XT("PLC02.KRCWO12ESMC117").addEventListener('change',KRCWO12ESMC117) 
+    
+    function KRCWO12ESMC117(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ESMC117_S            
+            ,1000)
+    }
+
+    function KRCWO12ESMC117_S(){
+        var tag = $XT("PLC02.KRCWO12ESMC117");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESMC117 커밋")}, function(){console.log("KRCWO12ESMC117 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESMC117 롤백")}, function(){console.log("KRCWO12ESMC117 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 21-시밍 2 KRCWO12ESMC221
+(function (){
+    $XT("_Devices.PLC02.IsActive").addEventListener('change',KRCWO12ESMC221)
+    $XT("PLC02.KRCWO12ESMC221").addEventListener('change',KRCWO12ESMC221) 
+    
+    function KRCWO12ESMC221(event){
+        if($XT("_Devices.PLC02.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ESMC221_S            
+            ,1000)
+    }
+
+    function KRCWO12ESMC221_S(){
+        var tag = $XT("PLC02.KRCWO12ESMC221");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESMC221 커밋")}, function(){console.log("KRCWO12ESMC221 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ESMC221 롤백")}, function(){console.log("KRCWO12ESMC221 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 34-Tub Assy 완료 KRCWO12ECON234
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12ECON234)
+    $XT("PLC03.KRCWO12ECON234").addEventListener('change',KRCWO12ECON234) 
+    
+    function KRCWO12ECON234(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12ECON234_S            
+            ,1000)
+    }
+
+    function KRCWO12ECON234_S(){
+        var tag = $XT("PLC03.KRCWO12ECON234");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ECON234 커밋")}, function(){console.log("KRCWO12ECON234 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12ECON234 롤백")}, function(){console.log("KRCWO12ECON234 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 25-롤 포밍 KRCWO12EFOR125
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EFOR125)
+    $XT("PLC03.KRCWO12EFOR125").addEventListener('change',KRCWO12EFOR125) 
+    
+    function KRCWO12EFOR125(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EFOR125_S            
+            ,1000)
+    }
+
+    function KRCWO12EFOR125_S(){
+        var tag = $XT("PLC03.KRCWO12EFOR125");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFOR125 커밋")}, function(){console.log("KRCWO12EFOR125 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFOR125 롤백")}, function(){console.log("KRCWO12EFOR125 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 26-롤 포밍 가공 KRCWO12EFOR226
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EFOR226)
+    $XT("PLC03.KRCWO12EFOR226").addEventListener('change',KRCWO12EFOR226) 
+    
+    function KRCWO12EFOR226(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EFOR226_S            
+            ,1000)
+    }
+
+    function KRCWO12EFOR226_S(){
+        var tag = $XT("PLC03.KRCWO12EFOR226");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFOR226 커밋")}, function(){console.log("KRCWO12EFOR226 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EFOR226 롤백")}, function(){console.log("KRCWO12EFOR226 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 27-패킹 가이드 공급 KRCWO12EMOM527
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EMOM527)
+    $XT("PLC03.KRCWO12EMOM527").addEventListener('change',KRCWO12EMOM527) 
+    
+    function KRCWO12EMOM527(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM527_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM527_S(){
+        var tag = $XT("PLC03.KRCWO12EMOM527");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM527 커밋")}, function(){console.log("KRCWO12EMOM527 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM527 롤백")}, function(){console.log("KRCWO12EMOM527 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 29-레일 브라켓 공급 KRCWO12EMOM629
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EMOM629)
+    $XT("PLC03.KRCWO12EMOM629").addEventListener('change',KRCWO12EMOM629) 
+    
+    function KRCWO12EMOM629(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM629_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM629_S(){
+        var tag = $XT("PLC03.KRCWO12EMOM629");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM629 커밋")}, function(){console.log("KRCWO12EMOM629 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM629 롤백")}, function(){console.log("KRCWO12EMOM629 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 32-바디 프레임 공급 KRCWO12EMOM732
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EMOM732)
+    $XT("PLC03.KRCWO12EMOM732").addEventListener('change',KRCWO12EMOM732) 
+    
+    function KRCWO12EMOM732(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EMOM732_S            
+            ,1000)
+    }
+
+    function KRCWO12EMOM732_S(){
+        var tag = $XT("PLC03.KRCWO12EMOM732");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM732 커밋")}, function(){console.log("KRCWO12EMOM732 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EMOM732 롤백")}, function(){console.log("KRCWO12EMOM732 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 28-패킹 가이드 용접1 KRCWO12EWEM428
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EWEM428)
+    $XT("PLC03.KRCWO12EWEM428").addEventListener('change',KRCWO12EWEM428) 
+    
+    function KRCWO12EWEM428(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM428_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM428_S(){
+        var tag = $XT("PLC03.KRCWO12EWEM428");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM428 커밋")}, function(){console.log("KRCWO12EWEM428 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM428 롤백")}, function(){console.log("KRCWO12EWEM428 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 30-레일 브라켓 용접 KRCWO12EWEM530
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EWEM530)
+    $XT("PLC03.KRCWO12EWEM530").addEventListener('change',KRCWO12EWEM530) 
+    
+    function KRCWO12EWEM530(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM530_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM530_S(){
+        var tag = $XT("PLC03.KRCWO12EWEM530");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM530 커밋")}, function(){console.log("KRCWO12EWEM530 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM530 롤백")}, function(){console.log("KRCWO12EWEM530 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 31-패킹 가이드 용접2 KRCWO12EWEM631
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EWEM631)
+    $XT("PLC03.KRCWO12EWEM631").addEventListener('change',KRCWO12EWEM631) 
+    
+    function KRCWO12EWEM631(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM631_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM631_S(){
+        var tag = $XT("PLC03.KRCWO12EWEM631");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM631 커밋")}, function(){console.log("KRCWO12EWEM631 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM631 롤백")}, function(){console.log("KRCWO12EWEM631 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();
+
+// 33-바디 프레임 용접 KRCWO12EWEM733
+(function (){
+    $XT("_Devices.PLC03.IsActive").addEventListener('change',KRCWO12EWEM733)
+    $XT("PLC03.KRCWO12EWEM733").addEventListener('change',KRCWO12EWEM733) 
+    
+    function KRCWO12EWEM733(event){
+        if($XT("_Devices.PLC03.IsActive").value == false) return;
+        setTimeout(
+            KRCWO12EWEM733_S            
+            ,1000)
+    }
+
+    function KRCWO12EWEM733_S(){
+        var tag = $XT("PLC03.KRCWO12EWEM733");
+        if(tag.value == null) return;
+        if(tag.value == false) return;
+        
+        var fullName = tag.fullName;
+        fullName = fullName.split('.');
+        var plc = fullName[0];
+        var mCode = fullName[1];
+        var group = $XT(plc + ".Operation." + mCode);
+        var pQuery = "INSERT INTO XSCADA_OPERATION(TIME, NAME, VALUE)";
+        
+        for(var i = 0; i<group.children.count; i++){
+            var time = $XT("TIME").value; // 저장 시간
+            var name = group.children[i].fullName; // 태그 이름
+            var value = group.children[i].value; // 태그 값
+            
+            if(i==group.children.count-1){
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL"
+            }else{
+                pQuery += " SELECT TO_TIMESTAMP('"+time+"'),'"+name+"','"+value+"' FROM DUAL UNION ALL"
+            }
+        }
+        console.log(pQuery)
+        $XD("oracle_1").execQuery(pQuery, null, success, error); 
+        
+        function success(data){   
+            var pQuery = "COMMIT";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM733 커밋")}, function(){console.log("KRCWO12EWEM733 커밋실패")}); 
+            $XT(plc +"." + mCode + "_E").value = $XT(plc +"." + mCode).value;
+            //console.log(plc +"." + mCode + "_E = " + $XT(plc +"." + mCode + "_E").value);
+            setTimeout(function rset(){$XT(plc +"." + mCode + "_E").value = false;},2000)
+        }    
+        
+        function error(msg) {
+            var pQuery = "ROLLBACK";
+            //console.log(pQuery)
+            $XD("oracle_1").execQuery(pQuery, null, function(){console.log("KRCWO12EWEM733 롤백")}, function(){console.log("KRCWO12EWEM733 롤백실패")}); 
+            console.log("onFailed : " + msg);
+        } 
+    }
+})();

@@ -32,7 +32,7 @@ class Process:
     - 101: 순번
     """
     id: Optional[int] = None
-    line_id: int = 0
+    machine_code: Optional[str] = None  # machines.machine_code 참조
     process_code: str = ""  # 14자리 설비 코드
     process_name: str = ""
     description: Optional[str] = None
@@ -54,6 +54,31 @@ class PLCConnection:
     protocol: str = "MC_3E_ASCII"
     connection_timeout: int = 5
     is_active: bool = True
+    # MELSEC 설정
+    driver_version: Optional[str] = "V2"
+    message_format: Optional[str] = "Binary"
+    series: Optional[str] = "Q Series"
+    # SSL/TLS 설정
+    ssl_root_cert: Optional[str] = None
+    ssl_version: Optional[str] = "None"
+    ssl_password: Optional[str] = None
+    ssl_private_key: Optional[str] = None
+    ssl_certificate: Optional[str] = None
+    # 네트워크 설정
+    local_address: Optional[str] = None
+    network_type: Optional[str] = "tcp"
+    # 소켓 설정
+    keep_alive: Optional[bool] = False
+    linger_time: Optional[int] = -1
+    # 일반 설정
+    description: Optional[str] = None
+    scan_time: Optional[int] = 1000
+    # 장치 설정
+    charset: Optional[str] = "UTF8"
+    text_endian: Optional[str] = "None"
+    # 장치 블락 설정
+    unit_size: Optional[str] = "16Bit"
+    block_size: Optional[int] = 64
     last_connected_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

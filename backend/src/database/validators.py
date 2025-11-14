@@ -85,13 +85,13 @@ def validate_ipv4_address(ip: str) -> bool:
 # Foreign Key Validation
 # ==============================================================================
 
-def validate_machine_exists(db: SQLiteManager, machine_id: int) -> bool:
+def validate_machine_exists(db: SQLiteManager, machine_code: str) -> bool:
     """
-    Validate that machine exists
+    Validate that machine exists by machine_code
 
     Args:
         db: Database manager
-        machine_id: Machine ID to check
+        machine_code: Machine code to check
 
     Returns:
         True if exists
@@ -99,13 +99,16 @@ def validate_machine_exists(db: SQLiteManager, machine_id: int) -> bool:
     Raises:
         ForeignKeyError: If machine not found
     """
+    if machine_code is None:
+        return True  # machine_code is optional
+    
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM machines WHERE id = ?", (machine_id,))
+        cursor.execute("SELECT machine_code FROM machines WHERE machine_code = ?", (machine_code,))
         if not cursor.fetchone():
             raise ForeignKeyError(
                 message="Machine not found",
-                detail=f"machine_id {machine_id} not found"
+                detail=f"machine_code '{machine_code}' not found"
             )
     return True
 

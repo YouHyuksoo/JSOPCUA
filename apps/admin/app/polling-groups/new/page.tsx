@@ -7,8 +7,11 @@ import { getTags } from '@/lib/api/tags';
 import { PollingGroupFormData } from '@/lib/validators/polling-group';
 import { Tag } from '@/lib/types/tag';
 import PollingGroupForm from '@/components/forms/PollingGroupForm';
-import Nav from '@/components/nav';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { Layers, Loader2, ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export default function NewPollingGroupPage() {
   const router = useRouter();
@@ -16,7 +19,8 @@ export default function NewPollingGroupPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    getTags(1, 100).then((data) => {
+    // is_active=true인 태그만 가져오기 (limit=10000)
+    getTags(1, 10000, undefined, true).then((data) => {
       setTags(data.items);
       setLoading(false);
     });
@@ -24,7 +28,13 @@ export default function NewPollingGroupPage() {
 
   const handleSubmit = async (data: PollingGroupFormData) => {
     try {
-      await createPollingGroup(data);
+      // Convert form data to API request format
+      await createPollingGroup({
+        name: data.name,
+        polling_interval: data.polling_interval_ms,
+        is_active: true,
+        tag_ids: data.tag_ids,
+      });
       toast.success('폴링 그룹이 생성되었습니다');
       router.push('/polling-groups');
     } catch (error) {
@@ -36,17 +46,33 @@ export default function NewPollingGroupPage() {
     router.push('/polling-groups');
   };
 
-  if (loading) return <div>Loading...</div>;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
-    <div>
-      <Nav />
-      <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6">새 폴링 그룹 생성</h1>
-        <div className="bg-white rounded-lg shadow p-6 max-w-2xl">
-          <PollingGroupForm tags={tags} onSubmit={handleSubmit} onCancel={handleCancel} />
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Link href="/polling-groups">
+          <Button variant="outline" size="sm" className="bg-gray-800 border-gray-700 hover:bg-gray-700">
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            뒤로
+          </Button>
+        </Link>
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-2">
+            <Layers className="h-8 w-8" />
+            새 폴링 그룹 생성
+          </h1>
+          <p className="text-gray-400 mt-1">새로운 폴링 그룹을 등록합니다</p>
         </div>
       </div>
+
+      <PollingGroupForm tags={tags} onSubmit={handleSubmit} onCancel={handleCancel} />
     </div>
   );
 }

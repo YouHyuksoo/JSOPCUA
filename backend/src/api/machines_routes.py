@@ -125,6 +125,144 @@ def list_machines(
 
 
 # ==============================================================================
+# GET /api/machines/oracle-connection-info - Get Oracle connection info
+# ==============================================================================
+
+@router.get("/oracle-connection-info", response_model=Dict)
+def get_oracle_connection_info():
+    """
+    Get Oracle database connection information (without password)
+
+    Returns:
+        {
+            "host": "localhost",
+            "port": 1521,
+            "service_name": "ORCL",
+            "username": "scada_user",
+            "dsn": "localhost:1521/ORCL",
+            "connection_string": "scada_user@localhost:1521/ORCL"
+        }
+    """
+    try:
+        from src.oracle_writer.config import load_config_from_env
+        config = load_config_from_env()
+        return config.to_dict()
+    except Exception as e:
+        logger.error(f"Failed to load Oracle config: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load Oracle configuration: {str(e)}"
+        )
+
+
+# ==============================================================================
+# POST /api/machines/sync-from-oracle - Sync machines from Oracle DB
+# ==============================================================================
+
+@router.post("/sync-from-oracle", response_model=Dict)
+def sync_machines_from_oracle(db: SQLiteManager = Depends(get_db)):
+    """
+    Synchronize machines from Oracle ICOM_MACHINE_MASTER table to SQLite
+
+    This endpoint:
+    1. Fetches all active machines (USE_YN='Y') from Oracle ICOM_MACHINE_MASTER
+    2. For each Oracle machine:
+       - If machine_code exists in SQLite: UPDATE the machine
+       - If machine_code doesn't exist: INSERT new machine
+    3. Returns sync statistics (total, created, updated, skipped, errors)
+
+    Returns:
+        {
+            "success": true,
+            "total_oracle_machines": 10,
+            "created": 5,
+            "updated": 3,
+            "skipped": 2,
+            "errors": 0,
+            "error_details": []
+        }
+    """
+    try:
+        # Fetch machines from Oracle
+        logger.info("Starting Oracle machine synchronization...")
+        oracle_machines = get_oracle_machines()
+        logger.info(f"Fetched {len(oracle_machines)} machines from Oracle")
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+        error_count = 0
+        error_details = []
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            for oracle_machine in oracle_machines:
+                machine_code = oracle_machine['machine_code']
+                machine_name = oracle_machine['machine_name']
+                location = oracle_machine.get('location')
+                is_active = oracle_machine.get('is_active', 1)
+
+                try:
+                    # Check if machine exists in SQLite
+                    cursor.execute(
+                        "SELECT id FROM machines WHERE machine_code = ?",
+                        (machine_code,)
+                    )
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # UPDATE existing machine
+                        machine_id = existing[0]
+                        cursor.execute("""
+                            UPDATE machines
+                            SET machine_name = ?,
+                                location = ?,
+                                is_active = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE machine_code = ?
+                        """, (machine_name, location, is_active, machine_code))
+                        updated_count += 1
+                        logger.info(f"Updated machine: {machine_code}")
+                    else:
+                        # INSERT new machine
+                        cursor.execute("""
+                            INSERT INTO machines (machine_code, machine_name, location, is_active)
+                            VALUES (?, ?, ?, ?)
+                        """, (machine_code, machine_name, location, is_active))
+                        created_count += 1
+                        logger.info(f"Created machine: {machine_code}")
+
+                except Exception as e:
+                    error_count += 1
+                    error_msg = f"Failed to sync {machine_code}: {str(e)}"
+                    error_details.append(error_msg)
+                    logger.error(error_msg)
+
+            conn.commit()
+
+        result = {
+            "success": error_count == 0,
+            "total_oracle_machines": len(oracle_machines),
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error_details": error_details
+        }
+
+        logger.info(f"Oracle sync completed: {result}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Oracle sync failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync from Oracle: {str(e)}"
+        )
+
+
+# ==============================================================================
 # GET /api/machines/{id} - Get single machine by ID
 # ==============================================================================
 
@@ -251,114 +389,3 @@ def delete_machine(machine_id: int, db: SQLiteManager = Depends(get_db)):
 
     # Log operation
     log_crud_operation("DELETE", "Machine", machine_id, success=True)
-
-
-# ==============================================================================
-# POST /api/machines/sync-from-oracle - Sync machines from Oracle DB
-# ==============================================================================
-
-@router.post("/sync-from-oracle", response_model=Dict)
-def sync_machines_from_oracle(db: SQLiteManager = Depends(get_db)):
-    """
-    Synchronize machines from Oracle ICOM_MACHINE_MASTER table to SQLite
-
-    This endpoint:
-    1. Fetches all active machines (USE_YN='Y') from Oracle ICOM_MACHINE_MASTER
-    2. For each Oracle machine:
-       - If machine_code exists in SQLite: UPDATE the machine
-       - If machine_code doesn't exist: INSERT new machine
-    3. Returns sync statistics (total, created, updated, skipped, errors)
-
-    Returns:
-        {
-            "success": true,
-            "total_oracle_machines": 10,
-            "created": 5,
-            "updated": 3,
-            "skipped": 2,
-            "errors": 0,
-            "error_details": []
-        }
-    """
-    try:
-        # Fetch machines from Oracle
-        logger.info("Starting Oracle machine synchronization...")
-        oracle_machines = get_oracle_machines()
-        logger.info(f"Fetched {len(oracle_machines)} machines from Oracle")
-
-        created_count = 0
-        updated_count = 0
-        skipped_count = 0
-        error_count = 0
-        error_details = []
-
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-
-            for oracle_machine in oracle_machines:
-                machine_code = oracle_machine['machine_code']
-                machine_name = oracle_machine['machine_name']
-                location = oracle_machine['machine_location']
-
-                try:
-                    # Check if machine exists in SQLite
-                    cursor.execute(
-                        "SELECT id FROM machines WHERE machine_code = ?",
-                        (machine_code,)
-                    )
-                    existing = cursor.fetchone()
-
-                    if existing:
-                        # UPDATE existing machine
-                        machine_id = existing[0]
-                        cursor.execute("""
-                            UPDATE machines
-                            SET machine_name = ?,
-                                location = ?,
-                                is_active = 1,
-                                updated_at = CURRENT_TIMESTAMP
-                            WHERE machine_code = ?
-                        """, (machine_name, location, machine_code))
-                        updated_count += 1
-                        logger.debug(f"Updated machine: {machine_code}")
-
-                    else:
-                        # INSERT new machine
-                        cursor.execute("""
-                            INSERT INTO machines (machine_code, machine_name, location, is_active)
-                            VALUES (?, ?, ?, 1)
-                        """, (machine_code, machine_name, location))
-                        created_count += 1
-                        logger.debug(f"Created machine: {machine_code}")
-
-                except Exception as e:
-                    error_count += 1
-                    error_msg = f"Error processing {machine_code}: {str(e)}"
-                    error_details.append(error_msg)
-                    logger.error(error_msg)
-                    continue
-
-            # Commit all changes
-            conn.commit()
-
-        logger.info(
-            f"Sync completed: {created_count} created, "
-            f"{updated_count} updated, {error_count} errors"
-        )
-
-        return {
-            "success": True,
-            "total_oracle_machines": len(oracle_machines),
-            "created": created_count,
-            "updated": updated_count,
-            "skipped": skipped_count,
-            "errors": error_count,
-            "error_details": error_details
-        }
-
-    except Exception as e:
-        logger.error(f"Oracle sync failed: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to sync machines from Oracle: {str(e)}"
-        )

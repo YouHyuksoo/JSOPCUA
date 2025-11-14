@@ -34,7 +34,7 @@ def test_machines_api():
     return None
 
 
-def test_processes_api(machine_id):
+def test_processes_api(machine_code):
     """Test /api/processes endpoints"""
     print("\n" + "=" * 70)
     print("Testing Processes API")
@@ -50,16 +50,16 @@ def test_processes_api(machine_id):
         if data['items']:
             process = data['items'][0]
             print(f"   ✓ Sample: {process['process_code']} - {process['process_name']}")
-            print(f"   ✓ machine_id: {process['machine_id']}")
+            print(f"   ✓ machine_code: {process.get('machine_code', 'None')}")
 
-    # 2. Filter by machine_id
-    if machine_id:
-        print(f"\n2. GET /api/processes?machine_id={machine_id}")
-        response = requests.get(f"{BASE_URL}/api/processes?machine_id={machine_id}")
+    # 2. Filter by machine_code
+    if machine_code:
+        print(f"\n2. GET /api/processes?machine_code={machine_code}")
+        response = requests.get(f"{BASE_URL}/api/processes?machine_code={machine_code}")
         print(f"   Status: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            print(f"   ✓ Found {data['total_count']} processes for machine {machine_id}")
+            print(f"   ✓ Found {data['total_count']} processes for machine {machine_code}")
 
 
 def test_database_view():
@@ -69,7 +69,7 @@ def test_database_view():
     print("=" * 70)
 
     import sqlite3
-    conn = sqlite3.connect("d:/Project/JSOPCUA/backend/config/scada.db")
+    conn = sqlite3.connect("d:/Project/JSOPCUA/backend/data/scada.db")
     cursor = conn.cursor()
 
     print("\n1. Query v_tags_with_plc view")
@@ -99,9 +99,17 @@ def main():
     try:
         # Test machines API
         machine_id = test_machines_api()
+        
+        # Get machine_code for processes API test
+        machine_code = None
+        if machine_id:
+            response = requests.get(f"{BASE_URL}/api/machines/{machine_id}")
+            if response.status_code == 200:
+                machine = response.json()
+                machine_code = machine.get('machine_code')
 
         # Test processes API
-        test_processes_api(machine_id)
+        test_processes_api(machine_code)
 
         # Test database view
         test_database_view()

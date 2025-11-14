@@ -6,8 +6,10 @@ Provides endpoints to start/stop the SCADA system and check its status.
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, List
 from datetime import datetime
+import os
+from pathlib import Path
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -194,13 +196,46 @@ async def restart_system():
     }
 
 
+class PLCStatusItem(BaseModel):
+    plc_id: int
+    plc_name: str
+    is_online: bool
+    last_seen: Optional[str] = None
+
+
+class SystemInfo(BaseModel):
+    cpu_percent: float
+    memory_used_gb: float
+    memory_total_gb: float
+    memory_percent: float
+    disk_used_gb: float
+    disk_total_gb: float
+    disk_percent: float
+    timestamp: str
+
+
+class BufferInfo(BaseModel):
+    current_size: int
+    max_size: int
+    utilization_percent: float
+    overflow_count: int = 0
+    last_overflow_time: Optional[str] = None
+
+
+class OracleWriterInfo(BaseModel):
+    success_count: int = 0
+    fail_count: int = 0
+    success_rate_percent: float = 0.0
+    backup_file_count: int = 0
+
+
 class DashboardDataResponse(BaseModel):
-    cpu_usage: float = 0.0
-    memory_usage: float = 0.0
-    disk_usage: float = 0.0
-    plc_status: dict = {"connected": 0, "total": 0}
-    polling_groups: dict = {"running": 0, "total": 0}
-    buffer_status: dict = {"current_size": 0, "max_size": 0, "utilization_percent": 0.0}
+    system: SystemInfo
+    plc_status: List[PLCStatusItem] = []
+    active_polling_groups: int = 0
+    total_polling_groups: int = 0
+    buffer: BufferInfo
+    oracle_writer: OracleWriterInfo
 
 
 @router.get("/dashboard", response_model=DashboardDataResponse)
@@ -211,6 +246,8 @@ async def get_dashboard_data():
     Returns CPU, memory, disk usage, PLC connections, polling groups, and buffer status.
     """
     import psutil
+    from src.api.dependencies import DB_PATH
+    from src.database.sqlite_manager import SQLiteManager
 
     # Get system resource usage
     cpu_usage = psutil.cpu_percent(interval=0.1)
@@ -218,13 +255,45 @@ async def get_dashboard_data():
     disk = psutil.disk_usage('/')
 
     # Initialize default values
-    plc_connected = 0
-    plc_total = 0
+    plc_status_list: List[PLCStatusItem] = []
     groups_running = 0
     groups_total = 0
     buffer_size = 0
     buffer_max = 10000
     buffer_util = 0.0
+    overflow_count = 0
+
+    # Get PLC list from database
+    db = SQLiteManager(DB_PATH)
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, plc_name, last_connected_at
+            FROM plc_connections
+            WHERE is_active = 1
+        """)
+        plc_rows = cursor.fetchall()
+
+        for plc_row in plc_rows:
+            plc_id, plc_name, last_connected = plc_row
+            # Check if PLC is online (connected in last 5 minutes)
+            is_online = False
+            last_seen = None
+
+            if last_connected:
+                last_seen = last_connected
+                # Simple check: if engine is running and has this PLC pool
+                if _polling_engine and hasattr(_polling_engine, 'pool_manager'):
+                    is_online = plc_id in _polling_engine.pool_manager._pools
+
+            plc_status_list.append(PLCStatusItem(
+                plc_id=plc_id,
+                plc_name=plc_name,
+                is_online=is_online,
+                last_seen=last_seen
+            ))
+
+        cursor.close()
 
     # Get SCADA-specific data if engine is available
     if _polling_engine and hasattr(_polling_engine, '_initialized') and _polling_engine._initialized:
@@ -233,12 +302,6 @@ async def get_dashboard_data():
             groups_status = _polling_engine.get_status_all()
             groups_total = len(groups_status)
             groups_running = sum(1 for g in groups_status if g.get('state') == 'running')
-
-            # Get PLC connection status
-            if hasattr(_polling_engine, 'pool_manager'):
-                # Count active PLC pools
-                plc_total = len(_polling_engine.pool_manager._pools)
-                plc_connected = plc_total  # Assume all are connected if pools exist
 
             # Get buffer status
             if hasattr(_polling_engine, 'data_buffer'):
@@ -251,14 +314,258 @@ async def get_dashboard_data():
             print(f"Error getting SCADA data: {e}")
 
     return DashboardDataResponse(
-        cpu_usage=cpu_usage,
-        memory_usage=memory.percent,
-        disk_usage=disk.percent,
-        plc_status={"connected": plc_connected, "total": plc_total},
-        polling_groups={"running": groups_running, "total": groups_total},
-        buffer_status={
-            "current_size": buffer_size,
-            "max_size": buffer_max,
-            "utilization_percent": buffer_util
-        }
+        system=SystemInfo(
+            cpu_percent=cpu_usage,
+            memory_used_gb=round(memory.used / (1024**3), 2),
+            memory_total_gb=round(memory.total / (1024**3), 2),
+            memory_percent=memory.percent,
+            disk_used_gb=round(disk.used / (1024**3), 2),
+            disk_total_gb=round(disk.total / (1024**3), 2),
+            disk_percent=disk.percent,
+            timestamp=datetime.now().isoformat()
+        ),
+        plc_status=plc_status_list,
+        active_polling_groups=groups_running,
+        total_polling_groups=groups_total,
+        buffer=BufferInfo(
+            current_size=buffer_size,
+            max_size=buffer_max,
+            utilization_percent=round(buffer_util, 2),
+            overflow_count=overflow_count
+        ),
+        oracle_writer=OracleWriterInfo()
     )
+
+
+# ==============================================================================
+# Environment Configuration Management
+# ==============================================================================
+
+class EnvConfigUpdate(BaseModel):
+    """Request model for updating environment configuration"""
+    # Database
+    DATABASE_PATH: Optional[str] = None
+
+    # API Server
+    API_HOST: Optional[str] = None
+    API_PORT: Optional[int] = None
+    API_RELOAD: Optional[bool] = None
+
+    # CORS
+    CORS_ORIGINS: Optional[str] = None
+
+    # Logging
+    LOG_LEVEL: Optional[str] = None
+    LOG_DIR: Optional[str] = None
+
+    # Polling Engine
+    MAX_POLLING_GROUPS: Optional[int] = None
+    DATA_QUEUE_SIZE: Optional[int] = None
+
+    # PLC Connection Pool
+    POOL_SIZE_PER_PLC: Optional[int] = None
+    CONNECTION_TIMEOUT: Optional[int] = None
+    READ_TIMEOUT: Optional[int] = None
+
+    # Oracle Database
+    ORACLE_HOST: Optional[str] = None
+    ORACLE_PORT: Optional[int] = None
+    ORACLE_SERVICE_NAME: Optional[str] = None
+    ORACLE_USERNAME: Optional[str] = None
+    ORACLE_PASSWORD: Optional[str] = None
+    ORACLE_POOL_MIN: Optional[int] = None
+    ORACLE_POOL_MAX: Optional[int] = None
+
+    # Buffer Configuration
+    BUFFER_MAX_SIZE: Optional[int] = None
+    BUFFER_BATCH_SIZE: Optional[int] = None
+    BUFFER_WRITE_INTERVAL: Optional[float] = None
+
+
+def get_env_file_path() -> Path:
+    """Get the path to the .env file"""
+    # Assuming the backend directory structure
+    backend_dir = Path(__file__).parent.parent.parent  # Go up to backend/
+    env_path = backend_dir / '.env'
+    return env_path
+
+
+def parse_env_file(env_path: Path) -> Dict[str, str]:
+    """Parse .env file and return key-value pairs"""
+    env_vars = {}
+
+    if not env_path.exists():
+        return env_vars
+
+    with open(env_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+
+            # Parse KEY=VALUE
+            if '=' in line:
+                key, value = line.split('=', 1)
+                env_vars[key.strip()] = value.strip()
+
+    return env_vars
+
+
+def write_env_file(env_path: Path, env_vars: Dict[str, str]):
+    """Write environment variables to .env file"""
+    with open(env_path, 'w', encoding='utf-8') as f:
+        f.write("# JSScada Backend Environment Configuration\n")
+        f.write("# Auto-generated by System Settings\n\n")
+
+        # Group configurations
+        groups = {
+            "Database": ["DATABASE_PATH"],
+            "API Server": ["API_HOST", "API_PORT", "API_RELOAD"],
+            "CORS Origins": ["CORS_ORIGINS"],
+            "Logging": ["LOG_LEVEL", "LOG_DIR", "LOG_COLORS", "LOG_MAX_BYTES", "LOG_BACKUP_COUNT"],
+            "Polling Engine": ["MAX_POLLING_GROUPS", "DATA_QUEUE_SIZE", "WEBSOCKET_BROADCAST_INTERVAL"],
+            "PLC Connection Pool": ["POOL_SIZE_PER_PLC", "CONNECTION_TIMEOUT", "READ_TIMEOUT", "IDLE_TIMEOUT"],
+            "Oracle Database": ["ORACLE_HOST", "ORACLE_PORT", "ORACLE_SERVICE_NAME", "ORACLE_USERNAME", "ORACLE_PASSWORD", "ORACLE_POOL_MIN", "ORACLE_POOL_MAX"],
+            "Buffer Configuration": ["BUFFER_MAX_SIZE", "BUFFER_BATCH_SIZE", "BUFFER_BATCH_SIZE_MAX", "BUFFER_WRITE_INTERVAL", "BUFFER_RETRY_COUNT", "BACKUP_FILE_PATH"],
+        }
+
+        for group_name, keys in groups.items():
+            f.write(f"# {group_name}\n")
+            for key in keys:
+                if key in env_vars:
+                    f.write(f"{key}={env_vars[key]}\n")
+            f.write("\n")
+
+
+@router.get("/env-config")
+async def get_env_config() -> Dict[str, str]:
+    """
+    Get current environment configuration from .env file
+
+    Returns all environment variables (passwords are masked)
+    """
+    try:
+        env_path = get_env_file_path()
+        env_vars = parse_env_file(env_path)
+
+        # Mask sensitive information
+        if 'ORACLE_PASSWORD' in env_vars:
+            env_vars['ORACLE_PASSWORD'] = '***'
+
+        return env_vars
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to read environment configuration: {str(e)}"
+        )
+
+
+class EnvConfigUpdateResponse(BaseModel):
+    """Response model for environment configuration update"""
+    success: bool
+    message: str
+    config: Dict[str, str]
+
+
+@router.put("/env-config")
+async def update_env_config(config: EnvConfigUpdate) -> EnvConfigUpdateResponse:
+    """
+    Update environment configuration and save to .env file
+
+    Only updates fields that are provided (non-null values)
+    Returns the updated configuration
+    """
+    try:
+        env_path = get_env_file_path()
+
+        # Read current configuration
+        env_vars = parse_env_file(env_path)
+
+        # Update with new values (only non-null fields)
+        update_data = config.dict(exclude_none=True)
+        for key, value in update_data.items():
+            # Convert boolean to string
+            if isinstance(value, bool):
+                value = 'true' if value else 'false'
+            # Convert to string
+            env_vars[key] = str(value)
+
+        # Write back to file
+        write_env_file(env_path, env_vars)
+
+        # Mask sensitive information in response
+        if 'ORACLE_PASSWORD' in env_vars:
+            env_vars['ORACLE_PASSWORD'] = '***'
+
+        return EnvConfigUpdateResponse(
+            success=True,
+            message="Environment configuration updated successfully. Restart required for changes to take effect.",
+            config=env_vars
+        )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update environment configuration: {str(e)}"
+        )
+
+
+class OracleConnectionTestResponse(BaseModel):
+    """Response model for Oracle connection test"""
+    success: bool
+    message: str
+    connection_info: Optional[Dict[str, str]] = None
+    error_details: Optional[str] = None
+
+
+@router.post("/test-oracle-connection")
+async def test_oracle_connection() -> OracleConnectionTestResponse:
+    """
+    Test Oracle database connection with current configuration
+
+    Returns connection status and details
+    """
+    try:
+        from src.oracle_writer.config import load_config_from_env
+        from src.oracle_writer.oracle_helper import OracleHelper
+
+        # Load Oracle configuration
+        config = load_config_from_env()
+
+        # Attempt to connect
+        with OracleHelper() as oracle:
+            # Simple test query
+            cursor = oracle.connection.cursor()
+            cursor.execute("SELECT 1 FROM DUAL")
+            result = cursor.fetchone()
+            cursor.close()
+
+            if result:
+                return OracleConnectionTestResponse(
+                    success=True,
+                    message="Oracle 데이터베이스 연결 성공",
+                    connection_info={
+                        "host": config.host,
+                        "port": str(config.port),
+                        "service_name": config.service_name,
+                        "username": config.username,
+                        "dsn": config.get_dsn()
+                    }
+                )
+            else:
+                return OracleConnectionTestResponse(
+                    success=False,
+                    message="Oracle 연결 테스트 쿼리 실패",
+                    error_details="SELECT 1 FROM DUAL returned no result"
+                )
+
+    except Exception as e:
+        error_message = str(e)
+        return OracleConnectionTestResponse(
+            success=False,
+            message="Oracle 데이터베이스 연결 실패",
+            error_details=error_message
+        )

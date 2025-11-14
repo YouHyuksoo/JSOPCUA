@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Database path (same as Feature 1) - use absolute path
 _current_file = Path(__file__).resolve()  # .../backend/src/api/dependencies.py
 _backend_dir = _current_file.parent.parent.parent  # .../backend
-DB_PATH = str(_backend_dir / "config" / "scada.db")
+DB_PATH = str(_backend_dir / "data" / "scada.db")
 
 
 # ==============================================================================
@@ -61,7 +61,7 @@ class PaginationParams:
     def __init__(
         self,
         page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-        limit: int = Query(50, ge=1, le=1000, description="Items per page (max 1000)")
+        limit: int = Query(50, ge=1, le=10000, description="Items per page (max 10000)")
     ):
         self.page = page
         self.limit = limit

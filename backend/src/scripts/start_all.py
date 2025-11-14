@@ -54,7 +54,7 @@ def main():
     print()
 
     # Configuration
-    db_path = "backend/config/scada.db"
+    db_path = "backend/data/scada.db"
 
     # Feature 3: Polling Engine
     print("[FEATURE 3] Initializing Polling Engine...")

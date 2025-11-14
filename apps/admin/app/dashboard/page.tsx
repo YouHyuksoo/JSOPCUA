@@ -58,51 +58,56 @@ export default function DashboardPage() {
     );
   }
 
+  const connectedPlcs = data.plc_status.filter(plc => plc.is_online).length;
+  const totalPlcs = data.plc_status.length;
+
   const stats = data ? [
     {
       title: 'CPU Usage',
-      value: `${data.cpu_usage.toFixed(1)}%`,
+      value: `${data.system.cpu_percent.toFixed(1)}%`,
       icon: Cpu,
-      color: data.cpu_usage > 80 ? 'text-red-500' : 'text-blue-500',
-      bgColor: data.cpu_usage > 80 ? 'bg-red-500/10' : 'bg-blue-500/10',
+      color: data.system.cpu_percent > 80 ? 'text-red-500' : 'text-blue-500',
+      bgColor: data.system.cpu_percent > 80 ? 'bg-red-500/10' : 'bg-blue-500/10',
     },
     {
       title: 'Memory Usage',
-      value: `${data.memory_usage.toFixed(1)}%`,
+      value: `${data.system.memory_percent.toFixed(1)}%`,
       icon: Database,
-      color: data.memory_usage > 80 ? 'text-red-500' : 'text-green-500',
-      bgColor: data.memory_usage > 80 ? 'bg-red-500/10' : 'bg-green-500/10',
+      color: data.system.memory_percent > 80 ? 'text-red-500' : 'text-green-500',
+      bgColor: data.system.memory_percent > 80 ? 'bg-red-500/10' : 'bg-green-500/10',
+      subtitle: `${data.system.memory_used_gb.toFixed(1)} / ${data.system.memory_total_gb.toFixed(1)} GB`,
     },
     {
       title: 'Disk Usage',
-      value: `${data.disk_usage.toFixed(1)}%`,
+      value: `${data.system.disk_percent.toFixed(1)}%`,
       icon: HardDrive,
-      color: data.disk_usage > 80 ? 'text-red-500' : 'text-purple-500',
-      bgColor: data.disk_usage > 80 ? 'bg-red-500/10' : 'bg-purple-500/10',
+      color: data.system.disk_percent > 80 ? 'text-red-500' : 'text-purple-500',
+      bgColor: data.system.disk_percent > 80 ? 'bg-red-500/10' : 'bg-purple-500/10',
+      subtitle: `${data.system.disk_used_gb.toFixed(1)} / ${data.system.disk_total_gb.toFixed(1)} GB`,
     },
     {
       title: 'PLC Connections',
-      value: `${data.plc_status.connected} / ${data.plc_status.total}`,
+      value: `${connectedPlcs} / ${totalPlcs}`,
       icon: Server,
-      color: data.plc_status.connected === data.plc_status.total ? 'text-green-500' : 'text-yellow-500',
-      bgColor: data.plc_status.connected === data.plc_status.total ? 'bg-green-500/10' : 'bg-yellow-500/10',
-      subtitle: `${data.plc_status.connected} connected`,
+      color: connectedPlcs === totalPlcs ? 'text-green-500' : 'text-yellow-500',
+      bgColor: connectedPlcs === totalPlcs ? 'bg-green-500/10' : 'bg-yellow-500/10',
+      subtitle: `${connectedPlcs} connected`,
     },
     {
       title: 'Polling Groups',
-      value: `${data.polling_groups.running} / ${data.polling_groups.total}`,
+      value: `${data.active_polling_groups} / ${data.total_polling_groups}`,
       icon: PlayCircle,
       color: 'text-cyan-500',
       bgColor: 'bg-cyan-500/10',
-      subtitle: `${data.polling_groups.running} running`,
+      subtitle: `${data.active_polling_groups} running`,
     },
     {
       title: 'Buffer Status',
-      value: `${data.buffer_status.utilization_percent.toFixed(1)}%`,
+      value: `${data.buffer.utilization_percent.toFixed(1)}%`,
       icon: TrendingUp,
-      color: data.buffer_status.utilization_percent > 80 ? 'text-red-500' : 'text-indigo-500',
-      bgColor: data.buffer_status.utilization_percent > 80 ? 'bg-red-500/10' : 'bg-indigo-500/10',
-      subtitle: `${data.buffer_status.current_size} / ${data.buffer_status.max_size} items`,
+      color: data.buffer.utilization_percent > 80 ? 'text-red-500' : 'text-indigo-500',
+      bgColor: data.buffer.utilization_percent > 80 ? 'bg-red-500/10' : 'bg-indigo-500/10',
+      subtitle: `${data.buffer.current_size} / ${data.buffer.max_size} items`,
     },
   ] : [];
 
@@ -154,15 +159,15 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
               <span className="text-gray-400">Total PLCs</span>
-              <span className="font-semibold text-white">{data.plc_status.total}</span>
+              <span className="font-semibold text-white">{totalPlcs}</span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
               <span className="text-gray-400">Active Groups</span>
-              <span className="font-semibold text-white">{data.polling_groups.running}</span>
+              <span className="font-semibold text-white">{data.active_polling_groups}</span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800">
               <span className="text-gray-400">Buffer Size</span>
-              <span className="font-semibold text-white">{data.buffer_status.current_size}</span>
+              <span className="font-semibold text-white">{data.buffer.current_size}</span>
             </div>
           </div>
         </CardContent>

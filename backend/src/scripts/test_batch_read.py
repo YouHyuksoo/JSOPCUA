@@ -24,7 +24,7 @@ def test_batch_performance(plc_code: str = None, start_address: int = 100, count
         start_address: 시작 태그 주소 번호 (기본 100, D100부터 시작)
         count: 읽을 태그 개수 (기본 50)
     """
-    db_path = os.path.join(os.path.dirname(__file__), '../../config/scada.db')
+    db_path = os.path.join(os.path.dirname(__file__), '../../data/scada.db')
 
     print(f"\n{'='*70}")
     print("Batch Read Performance Test")

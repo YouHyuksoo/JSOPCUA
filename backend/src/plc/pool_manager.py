@@ -243,9 +243,9 @@ class PoolManager:
         self._pools.clear()
         self._plc_info.clear()
 
-        # DB 연결 종료
-        if self._db:
-            self._db.close()
+        # SQLiteManager는 context manager를 사용하므로 명시적인 close가 필요 없음
+        # 각 연결은 get_connection() context에서 자동으로 닫힘
+        self._db = None
 
         logger.info("PoolManager shutdown complete")
 

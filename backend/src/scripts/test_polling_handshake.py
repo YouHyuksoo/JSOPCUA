@@ -30,7 +30,7 @@ def test_handshake_polling():
     print("=" * 60)
 
     # Initialize components
-    db_path = "backend/config/scada.db"
+    db_path = "backend/data/scada.db"
     pool_manager = PoolManager(db_path)
     engine = PollingEngine(db_path, pool_manager)
 

@@ -31,19 +31,18 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
     """
     Create a new PLC connection
 
-    - **process_id**: ID of parent process (must exist)
     - **plc_code**: Unique PLC code (max 50 chars)
+    - **plc_name**: PLC name (max 100 chars)
     - **ip_address**: IPv4 address
-    - **port**: Port number (default: 5000)
+    - **port**: Port number (default: 5010)
+    - **protocol**: Protocol type (default: 'MC_3E_ASCII')
     - **network_no**: Network number (default: 0)
     - **station_no**: Station number (default: 0)
-    - **enabled**: Enable/disable flag (default: true)
+    - **connection_timeout**: Connection timeout in seconds (default: 5)
+    - **is_active**: Enable/disable flag (default: true)
 
     Returns created PLC connection with id, created_at, updated_at
     """
-    # Validate foreign key
-    validate_process_exists(db, plc.process_id)
-
     # Validate IP address
     validate_ipv4_address(plc.ip_address)
 
@@ -54,19 +53,22 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO plc_connections (
-                process_id, plc_code, plc_name, ip_address, port,
-                protocol, connection_timeout, is_active
+                plc_code, plc_name, plc_spec, plc_type, ip_address, port, protocol,
+                network_no, station_no, connection_timeout, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            plc.process_id,
             plc.plc_code,
-            plc.plc_code,  # plc_name (use plc_code as default)
+            plc.plc_name,
+            plc.plc_spec,
+            plc.plc_type,
             plc.ip_address,
             plc.port,
-            'MC-3E',  # protocol (default)
-            5000,  # connection_timeout (default 5000ms)
-            plc.enabled  # is_active
+            plc.protocol,
+            plc.network_no,
+            plc.station_no,
+            plc.connection_timeout,
+            plc.is_active
         ))
         conn.commit()
         plc_id = cursor.lastrowid
@@ -80,19 +82,23 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
         cursor.execute("SELECT * FROM plc_connections WHERE id = ?", (plc_id,))
         row = cursor.fetchone()
 
-    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    # Row format: (id, plc_code, plc_name, ip_address, port, protocol, network_no, station_no, connection_timeout, is_active, last_connected_at, created_at, updated_at, plc_spec, plc_type)
     from datetime import datetime
     return PLCConnectionResponse(
         id=row[0],
-        process_id=row[1],
-        plc_code=row[2],
-        ip_address=row[4],
-        port=row[5],
-        network_no=0,  # Default value (not in DB)
-        station_no=0,  # Default value (not in DB)
-        enabled=bool(row[8]),  # is_active
-        created_at=row[10] if row[10] else datetime.now().isoformat(),
-        updated_at=row[11] if row[11] else datetime.now().isoformat()
+        plc_code=row[1],
+        plc_name=row[2],
+        plc_spec=row[13] if len(row) > 13 else None,
+        plc_type=row[14] if len(row) > 14 else None,
+        ip_address=row[3],
+        port=row[4],
+        protocol=row[5],
+        network_no=row[6] if row[6] is not None else 0,
+        station_no=row[7] if row[7] is not None else 0,
+        connection_timeout=row[8] if row[8] is not None else 5,
+        is_active=bool(row[9]),
+        created_at=row[11] if row[11] else datetime.now().isoformat(),
+        updated_at=row[12] if row[12] else datetime.now().isoformat()
     )
 
 
@@ -102,55 +108,51 @@ def create_plc_connection(plc: PLCConnectionCreate, db: SQLiteManager = Depends(
 
 @router.get("", response_model=PaginatedResponse[PLCConnectionResponse])
 def list_plc_connections(
-    process_id: int = None,
     pagination: PaginationParams = Depends(),
     db: SQLiteManager = Depends(get_db)
 ):
     """
     List all PLC connections with pagination
 
-    - **process_id**: Optional filter by process ID
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 50, max: 1000)
 
     Returns paginated list of PLC connections
     """
-    # Build query
-    where_clause = "WHERE process_id = ?" if process_id else ""
-    params_count = (process_id,) if process_id else ()
-    params_list = (process_id, pagination.limit, pagination.skip) if process_id else (pagination.limit, pagination.skip)
-
     # Get total count
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"SELECT COUNT(*) FROM plc_connections {where_clause}", params_count)
+        cursor.execute("SELECT COUNT(*) FROM plc_connections")
         total_count = cursor.fetchone()[0]
 
     # Get paginated PLC connections
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"""
+        cursor.execute("""
             SELECT * FROM plc_connections
-            {where_clause}
             ORDER BY id DESC
             LIMIT ? OFFSET ?
-        """, params_list)
+        """, (pagination.limit, pagination.skip))
         rows = cursor.fetchall()
 
-    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    # Row format: (id, plc_code, plc_name, ip_address, port, protocol, network_no, station_no, connection_timeout, is_active, last_connected_at, created_at, updated_at, plc_spec, plc_type)
     from datetime import datetime
     plcs = [
         PLCConnectionResponse(
             id=row[0],
-            process_id=row[1],
-            plc_code=row[2],
-            ip_address=row[4],
-            port=row[5],
-            network_no=0,  # Default value (not in DB)
-            station_no=0,  # Default value (not in DB)
-            enabled=bool(row[8]),  # is_active
-            created_at=row[10] if row[10] else datetime.now().isoformat(),
-            updated_at=row[11] if row[11] else datetime.now().isoformat()
+            plc_code=row[1],
+            plc_name=row[2],
+            plc_spec=row[13] if len(row) > 13 else None,
+            plc_type=row[14] if len(row) > 14 else None,
+            ip_address=row[3],
+            port=row[4],
+            protocol=row[5],
+            network_no=row[6] if row[6] is not None else 0,
+            station_no=row[7] if row[7] is not None else 0,
+            connection_timeout=row[8] if row[8] is not None else 5,
+            is_active=bool(row[9]),
+            created_at=row[11] if row[11] else datetime.now().isoformat(),
+            updated_at=row[12] if row[12] else datetime.now().isoformat()
         )
         for row in rows
     ]
@@ -161,6 +163,162 @@ def list_plc_connections(
         items=plcs,
         **metadata
     )
+
+
+# ==============================================================================
+# Oracle Synchronization APIs (MUST be before /{plc_id} to avoid path conflicts)
+# ==============================================================================
+
+@router.get("/oracle-connection-info")
+def get_oracle_connection_info():
+    """
+    Get Oracle database connection information (without password)
+
+    Returns connection details for Oracle sync confirmation dialog
+    """
+    try:
+        from src.oracle_writer.config import load_config_from_env
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        config = load_config_from_env()
+        return config.to_dict()
+    except Exception as e:
+        from fastapi import HTTPException
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        logger.error(f"Failed to load Oracle config: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load Oracle configuration: {str(e)}"
+        )
+
+
+@router.post("/sync-from-oracle")
+def sync_plcs_from_oracle(db: SQLiteManager = Depends(get_db)):
+    """
+    Synchronize PLCs from Oracle ICOM_PLC_MASTER table to SQLite plc_connections
+
+    매핑: ICOM_PLC_MASTER (Oracle) → plc_connections (SQLite)
+
+    This endpoint:
+    1. Fetches all active PLCs (PLC_USE_YN='Y') from Oracle ICOM_PLC_MASTER
+    2. For each Oracle PLC:
+       - If plc_code exists in SQLite: UPDATE the PLC
+       - If plc_code doesn't exist: INSERT new PLC
+    3. Returns sync statistics
+
+    Returns:
+        {
+            "success": true,
+            "total_oracle_plcs": 10,
+            "created": 5,
+            "updated": 3,
+            "skipped": 2,
+            "errors": 0,
+            "error_details": []
+        }
+    """
+    from src.oracle_writer.oracle_helper import get_oracle_plcs
+    from src.config.logging_config import get_logger
+    from fastapi import HTTPException
+
+    logger = get_logger(__name__)
+
+    try:
+        # Fetch PLCs from Oracle
+        logger.info("Starting Oracle PLC synchronization...")
+        oracle_plcs = get_oracle_plcs()
+        logger.info(f"Fetched {len(oracle_plcs)} PLCs from Oracle")
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+        error_count = 0
+        error_details = []
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            for oracle_plc in oracle_plcs:
+                plc_code = oracle_plc['plc_code']
+                plc_name = oracle_plc['plc_name']
+                plc_spec = oracle_plc.get('plc_spec')
+                plc_type = oracle_plc.get('plc_type')
+                ip_address = oracle_plc['ip_address']
+                port = oracle_plc['port']
+                network_no = oracle_plc['network_no']
+                station_no = oracle_plc['station_no']
+
+                try:
+                    # Check if PLC exists in SQLite
+                    cursor.execute(
+                        "SELECT id FROM plc_connections WHERE plc_code = ?",
+                        (plc_code,)
+                    )
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # UPDATE existing PLC
+                        cursor.execute("""
+                            UPDATE plc_connections
+                            SET plc_name = ?,
+                                plc_spec = ?,
+                                plc_type = ?,
+                                ip_address = ?,
+                                port = ?,
+                                protocol = ?,
+                                network_no = ?,
+                                station_no = ?,
+                                is_active = 1,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE plc_code = ?
+                        """, (plc_name, plc_spec, plc_type, ip_address, port, 'MC_3E_ASCII', network_no, station_no, plc_code))
+                        updated_count += 1
+                        logger.debug(f"Updated PLC: {plc_code}")
+
+                    else:
+                        # INSERT new PLC
+                        cursor.execute("""
+                            INSERT INTO plc_connections
+                            (plc_code, plc_name, plc_spec, plc_type, ip_address, port, protocol, network_no, station_no, is_active)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+                        """, (plc_code, plc_name, plc_spec, plc_type, ip_address, port, 'MC_3E_ASCII', network_no, station_no))
+                        created_count += 1
+                        logger.debug(f"Created PLC: {plc_code}")
+
+                except Exception as e:
+                    error_count += 1
+                    error_msg = f"Error processing {plc_code}: {str(e)}"
+                    error_details.append(error_msg)
+                    logger.error(error_msg)
+                    continue
+
+            # Commit all changes
+            conn.commit()
+
+        logger.info(
+            f"PLC sync completed: {created_count} created, "
+            f"{updated_count} updated, {error_count} errors"
+        )
+
+        return {
+            "success": True,
+            "total_oracle_plcs": len(oracle_plcs),
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error_details": error_details
+        }
+
+    except Exception as e:
+        logger.error(f"Oracle PLC sync failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync PLCs from Oracle: {str(e)}"
+        )
 
 
 # ==============================================================================
@@ -184,19 +342,23 @@ def get_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("PLC Connection", plc_id)
 
-    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    # Row format: (id, plc_code, plc_name, ip_address, port, protocol, network_no, station_no, connection_timeout, is_active, last_connected_at, created_at, updated_at, plc_spec, plc_type)
     from datetime import datetime
     return PLCConnectionResponse(
         id=row[0],
-        process_id=row[1],
-        plc_code=row[2],
-        ip_address=row[4],
-        port=row[5],
-        network_no=0,  # Default value (not in DB)
-        station_no=0,  # Default value (not in DB)
-        enabled=bool(row[8]),  # is_active
-        created_at=row[10] if row[10] else datetime.now().isoformat(),
-        updated_at=row[11] if row[11] else datetime.now().isoformat()
+        plc_code=row[1],
+        plc_name=row[2],
+        plc_spec=row[13] if len(row) > 13 else None,
+        plc_type=row[14] if len(row) > 14 else None,
+        ip_address=row[3],
+        port=row[4],
+        protocol=row[5],
+        network_no=row[6] if row[6] is not None else 0,
+        station_no=row[7] if row[7] is not None else 0,
+        connection_timeout=row[8] if row[8] is not None else 5,
+        is_active=bool(row[9]),
+        created_at=row[11] if row[11] else datetime.now().isoformat(),
+        updated_at=row[12] if row[12] else datetime.now().isoformat()
     )
 
 
@@ -225,11 +387,11 @@ def test_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
         raise_not_found("PLC Connection", plc_id)
 
     # Extract connection params
-    # Row format: (id, process_id, plc_code, plc_name, ip_address, port, protocol, connection_timeout, is_active, last_connected_at, created_at, updated_at)
-    ip_address = row[4]
-    port = row[5]
-    network_no = 0  # Default value (not in DB)
-    station_no = 0  # Default value (not in DB)
+    # Row format: (id, plc_code, plc_name, ip_address, port, protocol, network_no, station_no, connection_timeout, is_active, last_connected_at, created_at, updated_at)
+    plc_code = row[1]
+    ip_address = row[3]
+    port = row[4]
+    connection_timeout = row[8] if row[8] is not None else 5
 
     # Test connection using MC3EClient
     client = None
@@ -238,15 +400,62 @@ def test_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
 
         # Create client and attempt connection
         client = MC3EClient(
-            plc_type="Q",
-            host=ip_address,
+            ip_address=ip_address,
             port=port,
-            network_no=network_no,
-            station_no=station_no
+            plc_code=plc_code,
+            timeout=connection_timeout
         )
 
         # Try to connect
         client.connect()
+
+        # Read D100, W100+W101, and M100 test values
+        test_value_d100 = None
+        test_value_w100 = None
+        test_value_m100 = None
+
+        from src.config.logging_config import get_logger
+        logger = get_logger(__name__)
+
+        try:
+            test_value_d100 = client.read_single("D100")
+            logger.info(f"[{plc_code}] Test read D100 = {test_value_d100}")
+        except Exception as read_error:
+            logger.warning(f"[{plc_code}] Failed to read D100: {read_error}")
+
+        try:
+            # W100과 W101을 읽어서 32비트로 결합
+            values = client.read_batch(["W100", "W101"])
+
+            if "W100" in values and "W101" in values:
+                w100 = values["W100"]
+                w101 = values["W101"]
+
+                # 16비트 워드 2개를 32비트로 결합
+                # W100: 하위 16비트, W101: 상위 16비트
+                # 음수 처리를 위해 & 0xFFFF로 16비트 양수로 변환
+                w100_unsigned = w100 & 0xFFFF if w100 < 0 else w100
+                w101_unsigned = w101 & 0xFFFF if w101 < 0 else w101
+
+                # 32비트 결합: (상위 16비트 << 16) | 하위 16비트
+                test_value_w100 = (w101_unsigned << 16) | w100_unsigned
+
+                # 32비트 부호 있는 정수로 변환 (필요시)
+                if test_value_w100 >= 0x80000000:
+                    test_value_w100 = test_value_w100 - 0x100000000
+
+                logger.info(f"[{plc_code}] Test read W100+W101 = {test_value_w100} (W100={w100}, W101={w101})")
+            else:
+                logger.warning(f"[{plc_code}] Failed to read W100 or W101")
+        except Exception as read_error:
+            logger.warning(f"[{plc_code}] Failed to read W100+W101: {read_error}")
+
+        try:
+            # M100 비트 읽기
+            test_value_m100 = client.read_single("M100")
+            logger.info(f"[{plc_code}] Test read M100 = {test_value_m100}")
+        except Exception as read_error:
+            logger.warning(f"[{plc_code}] Failed to read M100: {read_error}")
 
         # Calculate response time
         response_time_ms = int((time.time() - start_time) * 1000)
@@ -257,6 +466,9 @@ def test_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
         return PLCTestResult(
             status="success",
             response_time_ms=response_time_ms,
+            test_value_d100=test_value_d100,
+            test_value_w100=test_value_w100,
+            test_value_m100=test_value_m100,
             error=None
         )
 
@@ -266,6 +478,9 @@ def test_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
         return PLCTestResult(
             status="failed",
             response_time_ms=None,
+            test_value_d100=None,
+            test_value_w100=None,
+            test_value_m100=None,
             error=error_message
         )
 
@@ -292,13 +507,16 @@ def update_plc_connection(
     Update a PLC connection
 
     - **plc_id**: PLC connection ID
+    - **plc_name**: Optional new PLC name
     - **ip_address**: Optional new IP address
     - **port**: Optional new port number
+    - **protocol**: Optional new protocol
     - **network_no**: Optional new network number
     - **station_no**: Optional new station number
-    - **enabled**: Optional enable/disable flag
+    - **connection_timeout**: Optional new timeout
+    - **is_active**: Optional enable/disable flag
 
-    Note: plc_code and process_id cannot be updated
+    Note: plc_code cannot be updated
 
     Returns updated PLC connection
     """
@@ -317,6 +535,18 @@ def update_plc_connection(
     updates = []
     params = []
 
+    if plc_update.plc_name is not None:
+        updates.append("plc_name = ?")
+        params.append(plc_update.plc_name)
+
+    if plc_update.plc_spec is not None:
+        updates.append("plc_spec = ?")
+        params.append(plc_update.plc_spec)
+
+    if plc_update.plc_type is not None:
+        updates.append("plc_type = ?")
+        params.append(plc_update.plc_type)
+
     if plc_update.ip_address is not None:
         updates.append("ip_address = ?")
         params.append(plc_update.ip_address)
@@ -325,11 +555,25 @@ def update_plc_connection(
         updates.append("port = ?")
         params.append(plc_update.port)
 
-    # network_no and station_no are not stored in DB (ignored)
+    if plc_update.protocol is not None:
+        updates.append("protocol = ?")
+        params.append(plc_update.protocol)
 
-    if plc_update.enabled is not None:
+    if plc_update.network_no is not None:
+        updates.append("network_no = ?")
+        params.append(plc_update.network_no)
+
+    if plc_update.station_no is not None:
+        updates.append("station_no = ?")
+        params.append(plc_update.station_no)
+
+    if plc_update.connection_timeout is not None:
+        updates.append("connection_timeout = ?")
+        params.append(plc_update.connection_timeout)
+
+    if plc_update.is_active is not None:
         updates.append("is_active = ?")
-        params.append(plc_update.enabled)
+        params.append(plc_update.is_active)
 
     if not updates:
         # No changes, return current PLC

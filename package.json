@@ -9,14 +9,16 @@
   "scripts": {
     "dev:admin": "npm run dev --workspace=apps/admin",
     "dev:monitor": "npm run dev --workspace=apps/monitor",
-    "dev": "npm run dev:admin & npm run dev:monitor",
+    "dev": "concurrently \"npm run dev:admin\" \"npm run dev:monitor\"",
     "build:admin": "npm run build --workspace=apps/admin",
     "build:monitor": "npm run build --workspace=apps/monitor",
-    "build": "npm run build --workspace=packages/ui && npm run build --workspace=packages/utils && npm run build:admin && npm run build:monitor",
+    "build": "npm run build:admin && npm run build:monitor",
     "lint": "npm run lint --workspaces --if-present",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
   "devDependencies": {
+    "@next/swc-win32-x64-msvc": "^14.2.33",
+    "concurrently": "^8.2.2",
     "lightningcss": "^1.30.2",
     "typescript": "^5.3.0"
   }

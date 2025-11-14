@@ -19,8 +19,8 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(backend_dir))
 
-DB_PATH = backend_dir / "config" / "scada.db"
-BACKUP_PATH = backend_dir / "config" / "scada_backup_before_migration.db"
+DB_PATH = backend_dir / "data" / "scada.db"
+BACKUP_PATH = backend_dir / "data" / "scada_backup_before_migration.db"
 
 
 def backup_database():

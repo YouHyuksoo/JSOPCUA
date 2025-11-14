@@ -29,7 +29,7 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
     """
     Create a new production process
 
-    - **machine_id**: ID of parent machine (must exist)
+    - **machine_code**: Code of parent machine (must exist if provided)
     - **process_sequence**: Sequence number in machine
     - **process_code**: 14-character process code (format: [A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3})
     - **process_name**: Process name (max 200 chars)
@@ -38,8 +38,9 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
 
     Returns created process with id, created_at, updated_at
     """
-    # Validate foreign key
-    validate_machine_exists(db, process.machine_id)
+    # Validate foreign key if machine_code is provided
+    if process.machine_code:
+        validate_machine_exists(db, process.machine_code)
 
     # Validate process code format
     validate_process_code(process.process_code)
@@ -51,12 +52,12 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO processes (
-                machine_id, sequence_order, process_code, process_name,
+                machine_code, sequence_order, process_code, process_name,
                 description, is_active
             )
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            process.machine_id,
+            process.machine_code,
             process.process_sequence,
             process.process_code,
             process.process_name,
@@ -75,14 +76,14 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
         cursor.execute("SELECT * FROM processes WHERE id = ?", (process_id,))
         row = cursor.fetchone()
 
-    # Row format: (id, line_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
+    # Row format: (id, process_code, process_name, machine_code, plc_id, description, is_active, created_at, updated_at, sequence_order)
     return ProcessResponse(
         id=row[0],
-        machine_id=row[1],
-        process_sequence=row[5],  # sequence_order
-        process_code=row[2],
-        process_name=row[3],
-        equipment_type=row[4],  # description
+        machine_code=row[3],  # machine_code
+        process_sequence=row[9],  # sequence_order
+        process_code=row[1],
+        process_name=row[2],
+        equipment_type=row[5],  # description
         enabled=bool(row[6]),  # is_active
         created_at=row[7],
         updated_at=row[8]
@@ -95,23 +96,23 @@ def create_process(process: ProcessCreate, db: SQLiteManager = Depends(get_db)):
 
 @router.get("", response_model=PaginatedResponse[ProcessResponse])
 def list_processes(
-    machine_id: int = None,
+    machine_code: str = None,
     pagination: PaginationParams = Depends(),
     db: SQLiteManager = Depends(get_db)
 ):
     """
     List all production processes with pagination
 
-    - **machine_id**: Optional filter by machine ID
+    - **machine_code**: Optional filter by machine code
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 50, max: 1000)
 
     Returns paginated list of processes
     """
     # Build query
-    where_clause = "WHERE machine_id = ?" if machine_id else ""
-    params_count = (machine_id,) if machine_id else ()
-    params_list = (machine_id, pagination.limit, pagination.skip) if machine_id else (pagination.limit, pagination.skip)
+    where_clause = "WHERE machine_code = ?" if machine_code else ""
+    params_count = (machine_code,) if machine_code else ()
+    params_list = (machine_code, pagination.limit, pagination.skip) if machine_code else (pagination.limit, pagination.skip)
 
     # Get total count
     with db.get_connection() as conn:
@@ -125,20 +126,20 @@ def list_processes(
         cursor.execute(f"""
             SELECT * FROM processes
             {where_clause}
-            ORDER BY machine_id, sequence_order
+            ORDER BY machine_code, sequence_order
             LIMIT ? OFFSET ?
         """, params_list)
         rows = cursor.fetchall()
 
-    # Row format: (id, machine_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
+    # Row format: (id, process_code, process_name, machine_code, plc_id, description, is_active, created_at, updated_at, sequence_order)
     processes = [
         ProcessResponse(
             id=row[0],
-            machine_id=row[1],
-            process_sequence=row[5],  # sequence_order
-            process_code=row[2],
-            process_name=row[3],
-            equipment_type=row[4],  # description
+            machine_code=row[3],  # machine_code
+            process_sequence=row[9],  # sequence_order
+            process_code=row[1],
+            process_name=row[2],
+            equipment_type=row[5],  # description
             enabled=bool(row[6]),  # is_active
             created_at=row[7],
             updated_at=row[8]
@@ -175,14 +176,14 @@ def get_process(process_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("Process", process_id)
 
-    # Row format: (id, machine_id, process_code, process_name, description, sequence_order, is_active, created_at, updated_at)
+    # Row format: (id, process_code, process_name, machine_code, plc_id, description, is_active, created_at, updated_at, sequence_order)
     return ProcessResponse(
         id=row[0],
-        machine_id=row[1],
-        process_sequence=row[5],  # sequence_order
-        process_code=row[2],
-        process_name=row[3],
-        equipment_type=row[4],  # description
+        machine_code=row[3],  # machine_code
+        process_sequence=row[9],  # sequence_order
+        process_code=row[1],
+        process_name=row[2],
+        equipment_type=row[5],  # description
         enabled=bool(row[6]),  # is_active
         created_at=row[7],
         updated_at=row[8]
@@ -208,7 +209,7 @@ def update_process(
     - **equipment_type**: Optional new equipment type
     - **enabled**: Optional enable/disable flag
 
-    Note: process_code and machine_id cannot be updated
+    Note: process_code and machine_code cannot be updated
 
     Returns updated process
     """
@@ -290,3 +291,150 @@ def delete_process(process_id: int, db: SQLiteManager = Depends(get_db)):
 
     # Log operation
     log_crud_operation("DELETE", "Process", process_id, success=True)
+
+
+# ==============================================================================
+# Oracle Synchronization APIs
+# ==============================================================================
+
+@router.get("/oracle-connection-info")
+def get_oracle_connection_info():
+    """
+    Get Oracle database connection information (without password)
+
+    Returns connection details for Oracle sync confirmation dialog
+    """
+    try:
+        from src.oracle_writer.config import load_config_from_env
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        config = load_config_from_env()
+        return config.to_dict()
+    except Exception as e:
+        from fastapi import HTTPException
+        from src.config.logging_config import get_logger
+
+        logger = get_logger(__name__)
+        logger.error(f"Failed to load Oracle config: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to load Oracle configuration: {str(e)}"
+        )
+
+
+@router.post("/sync-from-oracle")
+def sync_processes_from_oracle(db: SQLiteManager = Depends(get_db)):
+    """
+    Synchronize processes from Oracle ICOM_WORKSTAGE_MASTER table to SQLite processes
+
+    매핑: ICOM_WORKSTAGE_MASTER (Oracle) → processes (SQLite)
+
+    This endpoint:
+    1. Fetches all active processes (USE_YN='Y') from Oracle ICOM_WORKSTAGE_MASTER
+    2. For each Oracle process:
+       - If process_code exists in SQLite: UPDATE the process
+       - If process_code doesn't exist: INSERT new process
+    3. Returns sync statistics
+
+    Returns:
+        {
+            "success": true,
+            "total_oracle_processes": 20,
+            "created": 10,
+            "updated": 8,
+            "skipped": 2,
+            "errors": 0,
+            "error_details": []
+        }
+    """
+    from src.oracle_writer.oracle_helper import get_oracle_processes
+    from src.config.logging_config import get_logger
+    from fastapi import HTTPException
+
+    logger = get_logger(__name__)
+
+    try:
+        # Fetch processes from Oracle
+        logger.info("Starting Oracle process synchronization...")
+        oracle_processes = get_oracle_processes()
+        logger.info(f"Fetched {len(oracle_processes)} processes from Oracle")
+
+        created_count = 0
+        updated_count = 0
+        skipped_count = 0
+        error_count = 0
+        error_details = []
+
+        with db.get_connection() as conn:
+            cursor = conn.cursor()
+
+            for oracle_process in oracle_processes:
+                process_code = oracle_process['process_code']
+                process_name = oracle_process['process_name']
+                description = oracle_process.get('description', '')
+                sequence_order = oracle_process.get('sequence_order', 0)
+
+                try:
+                    # Check if process exists in SQLite
+                    cursor.execute(
+                        "SELECT id FROM processes WHERE process_code = ?",
+                        (process_code,)
+                    )
+                    existing = cursor.fetchone()
+
+                    if existing:
+                        # UPDATE existing process
+                        cursor.execute("""
+                            UPDATE processes
+                            SET process_name = ?,
+                                description = ?,
+                                sequence_order = ?,
+                                is_active = 1,
+                                updated_at = CURRENT_TIMESTAMP
+                            WHERE process_code = ?
+                        """, (process_name, description, sequence_order, process_code))
+                        updated_count += 1
+                        logger.debug(f"Updated process: {process_code}")
+
+                    else:
+                        # INSERT new process (without machine_code and plc_id - will be set later)
+                        cursor.execute("""
+                            INSERT INTO processes
+                            (process_code, process_name, description, sequence_order, is_active)
+                            VALUES (?, ?, ?, ?, 1)
+                        """, (process_code, process_name, description, sequence_order))
+                        created_count += 1
+                        logger.debug(f"Created process: {process_code}")
+
+                except Exception as e:
+                    error_count += 1
+                    error_msg = f"Error processing {process_code}: {str(e)}"
+                    error_details.append(error_msg)
+                    logger.error(error_msg)
+                    continue
+
+            # Commit all changes
+            conn.commit()
+
+        logger.info(
+            f"Process sync completed: {created_count} created, "
+            f"{updated_count} updated, {error_count} errors"
+        )
+
+        return {
+            "success": True,
+            "total_oracle_processes": len(oracle_processes),
+            "created": created_count,
+            "updated": updated_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error_details": error_details
+        }
+
+    except Exception as e:
+        logger.error(f"Oracle process sync failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to sync processes from Oracle: {str(e)}"
+        )

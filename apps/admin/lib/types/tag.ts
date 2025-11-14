@@ -1,25 +1,36 @@
 export interface Tag {
   id: number;
-  name: string;
-  device_address: string;
-  data_type: string;
-  polling_interval: number;
-  unit?: string;
-  description?: string;
   plc_id: number;
-  plc_name?: string;
+  plc_code?: string | null;  // PLC code from plc_connections
+  process_id: number;
+  tag_address: string;
+  tag_name: string;
+  tag_division: string;
+  tag_category?: string | null;
+  data_type: string;
+  unit?: string | null;
+  scale: number;
+  machine_code?: string | null;
+  polling_group_id?: number | null;
+  enabled: boolean;
   created_at: string;
   updated_at: string;
+  // Legacy fields for compatibility
+  tag_id?: string;
 }
 
 export interface CreateTagRequest {
-  name: string;
-  device_address: string;
-  data_type: string;
-  polling_interval: number;
-  unit?: string;
-  description?: string;
   plc_id: number;
+  process_id: number;
+  tag_address: string;
+  tag_name: string;
+  tag_division?: string;
+  data_type: string;
+  unit?: string;
+  scale?: number;
+  machine_code?: string;
+  polling_group_id?: number;
+  enabled?: boolean;
 }
 
 export interface CSVUploadResponse {

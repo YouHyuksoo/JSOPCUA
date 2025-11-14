@@ -172,6 +172,7 @@ class PollingThread(ABC):
                 group_name=self.group.group_name,
                 plc_code=self.group.plc_code,
                 mode=self.group.mode,
+                group_category=self.group.group_category,
                 tag_values=tag_values,
                 poll_time_ms=poll_time_ms,
                 error_tags={}
