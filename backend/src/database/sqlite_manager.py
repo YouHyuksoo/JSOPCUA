@@ -234,3 +234,14 @@ class SQLiteManager:
             bool: 데이터베이스 파일 존재 여부
         """
         return self.db_path.exists()
+
+    def close(self):
+        """
+        SQLiteManager 인스턴스 종료 (호환성을 위한 메서드)
+        
+        Note:
+            SQLiteManager는 매번 새로운 연결을 생성하므로
+            인스턴스 레벨에서 닫을 연결이 없습니다.
+            이 메서드는 기존 코드와의 호환성을 위해 제공됩니다.
+        """
+        logger.debug("SQLiteManager.close() called (no-op, connections are managed per-request)")

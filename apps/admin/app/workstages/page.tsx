@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getProcesses, deleteProcess, syncProcessesFromOracle, getOracleConnectionInfo } from '@/lib/api/processes';
-import { Process } from '@/lib/types/process';
+import { getWorkstages, deleteWorkstage, syncWorkstagesFromOracle, getOracleConnectionInfo } from '@/lib/api/workstages';
+import { Workstage } from '@/lib/types/workstage';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,8 +28,8 @@ import TablePagination from '@/components/TablePagination';
 import { toast } from 'sonner';
 import { Plus, Search, Edit, Trash2, Loader2, Factory, RefreshCw, Filter } from 'lucide-react';
 
-export default function ProcessesPage() {
-  const [processes, setProcesses] = useState<Process[]>([]);
+export default function WorkstagesPage() {
+  const [processes, setProcesses] = useState<Workstage[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -44,7 +44,7 @@ export default function ProcessesPage() {
   const fetchProcesses = async (page = 1) => {
     setLoading(true);
     try {
-      const data = await getProcesses(page, itemsPerPage);
+      const data = await getWorkstages(page, itemsPerPage);
       setProcesses(data.items);
       setTotalPages(data.total_pages);
       setTotalItems(data.total_count);
@@ -63,7 +63,7 @@ export default function ProcessesPage() {
   const handleDelete = async () => {
     if (!deleteId) return;
     try {
-      await deleteProcess(deleteId);
+      await deleteWorkstage(deleteId);
       toast.success('공정이 삭제되었습니다');
       setDeleteId(null);
       fetchProcesses(currentPage);
@@ -75,7 +75,7 @@ export default function ProcessesPage() {
   const handleSyncFromOracle = async () => {
     setSyncing(true);
     try {
-      const result = await syncProcessesFromOracle();
+      const result = await syncWorkstagesFromOracle();
 
       if (result.success) {
         toast.success(
@@ -155,7 +155,7 @@ export default function ProcessesPage() {
             <RefreshCw className="h-4 w-4 mr-2" />
             Oracle 동기화
           </Button>
-          <Link href="/processes/new">
+          <Link href="/workstages/new">
             <Button className="bg-blue-600 hover:bg-blue-700">
               <Plus className="h-4 w-4 mr-2" />
               새 공정 추가
@@ -256,7 +256,7 @@ export default function ProcessesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Link href={`/processes/${process.id}`}>
+                        <Link href={`/workstages/${process.id}`}>
                           <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">
                             <Edit className="h-4 w-4" />
                           </Button>

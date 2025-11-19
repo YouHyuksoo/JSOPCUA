@@ -16,7 +16,7 @@ from .websocket_handler import websocket_endpoint, set_websocket_engine
 from .buffer_routes import router as buffer_router, set_buffer_components
 from .system_routes import router as system_router, set_system_engine
 from .machines_routes import router as machines_router
-from .processes_routes import router as processes_router
+from .workstages_routes import router as workstages_router
 from .plc_connections_routes import router as plc_connections_router
 from .tags_routes import router as tags_router
 from .polling_groups_routes import router as polling_groups_router
@@ -166,7 +166,7 @@ app.add_exception_handler(
 # 아래처럼 모든 주요 도메인별 라우터를 하나씩 app에 포함시켜, 각 도메인(예: machines, processes 등)별로 URL 경로가 자동으로 분리되어 관리됩니다.
 
 app.include_router(machines_router, tags=["machines"])
-app.include_router(processes_router, tags=["processes"])
+app.include_router(workstages_router, tags=["workstages"])
 app.include_router(plc_connections_router, tags=["plc-connections"])
 app.include_router(tags_router, tags=["tags"])
 app.include_router(polling_groups_router, tags=["polling-groups"])

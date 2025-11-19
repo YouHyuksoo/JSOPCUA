@@ -12,7 +12,6 @@ from .models import PLCConnectionCreate, PLCConnectionUpdate, PLCConnectionRespo
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
 from src.database.validators import (
-    validate_process_exists,
     validate_plc_code_unique,
     validate_ipv4_address
 )

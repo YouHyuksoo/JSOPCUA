@@ -43,6 +43,8 @@ export default function EditPollingGroupPage({ params }: { params: { id: string 
       // Convert form data to API request format
       await updatePollingGroup(id, {
         name: data.name,
+        plc_code: pollingGroup?.plc_code ?? '',
+        workstage_code: pollingGroup?.workstage_code ?? undefined,
         polling_interval: data.polling_interval_ms,
         is_active: pollingGroup?.is_active ?? true,
         tag_ids: data.tag_ids,

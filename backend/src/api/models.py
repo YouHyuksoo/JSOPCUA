@@ -70,46 +70,46 @@ class MachineResponse(MachineBase):
 
 
 # ==============================================================================
-# Process Models
+# Workstage Models
 # ==============================================================================
 
-class ProcessBase(BaseModel):
-    """Base Process model"""
+class WorkstageBase(BaseModel):
+    """Base Workstage model"""
     machine_code: Optional[str] = Field(None, max_length=50)
-    process_sequence: int
-    process_code: str = Field(min_length=14, max_length=14)
-    process_name: str = Field(max_length=200)
+    workstage_sequence: int
+    workstage_code: str = Field(min_length=14, max_length=14)
+    workstage_name: str = Field(max_length=200)
     equipment_type: Optional[str] = Field(None, max_length=100)
     enabled: bool = True
 
-    @field_validator('process_code')
+    @field_validator('workstage_code')
     @classmethod
     def validate_code(cls, v):
-        """Validate 14-character process code format"""
+        """Validate 14-character workstage code format"""
         pattern = r'^[A-Z]{2}[A-Z]{3}\d{2}[A-Z]{3}[A-Z]\d{3}$'
         if not re.match(pattern, v):
             raise ValueError(
-                'process_code must be exactly 14 characters matching pattern: '
+                'workstage_code must be exactly 14 characters matching pattern: '
                 '[A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3}'
             )
         return v
 
 
-class ProcessCreate(ProcessBase):
-    """Process creation request"""
+class WorkstageCreate(WorkstageBase):
+    """Workstage creation request"""
     pass
 
 
-class ProcessUpdate(BaseModel):
-    """Process update request"""
-    process_sequence: Optional[int] = None
-    process_name: Optional[str] = None
+class WorkstageUpdate(BaseModel):
+    """Workstage update request"""
+    workstage_sequence: Optional[int] = None
+    workstage_name: Optional[str] = None
     equipment_type: Optional[str] = None
     enabled: Optional[bool] = None
 
 
-class ProcessResponse(ProcessBase):
-    """Process response"""
+class WorkstageResponse(WorkstageBase):
+    """Workstage response"""
     id: int
     created_at: datetime
     updated_at: datetime
@@ -215,8 +215,8 @@ class PLCTestResult(BaseModel):
 
 class TagBase(BaseModel):
     """Base Tag model"""
-    plc_id: int
-    process_id: int
+    plc_code: str = Field(max_length=50)
+    workstage_code: str = Field(max_length=50)
     tag_address: str = Field(max_length=20)
     tag_name: str = Field(max_length=200)
     tag_division: Optional[str] = Field(None, max_length=50)
@@ -266,7 +266,6 @@ class TagUpdate(BaseModel):
 class TagResponse(TagBase):
     """Tag response"""
     id: int
-    plc_code: Optional[str] = None  # PLC code from plc_connections table
     created_at: datetime
     updated_at: datetime
 
@@ -289,8 +288,8 @@ class PollingGroupBase(BaseModel):
     group_name: str = Field(max_length=200, alias='name')  # Accept 'name' from frontend
     line_code: Optional[str] = Field(None, max_length=50)  # Line code (optional, legacy field)
     machine_code: Optional[str] = Field(None, max_length=50)
-    process_code: Optional[str] = Field(None, max_length=50)
-    plc_id: int = Field(default=1)  # Default to PLC01
+    workstage_code: Optional[str] = Field(None, max_length=50)
+    plc_code: str = Field(default='PLC01', max_length=50)  # Default to PLC01
     mode: str = Field(default='FIXED')
     interval_ms: int = Field(default=1000, alias='polling_interval')  # Accept 'polling_interval' from frontend
     group_category: str = Field(default='OPERATION', description="Oracle table category: OPERATION or ALARM")

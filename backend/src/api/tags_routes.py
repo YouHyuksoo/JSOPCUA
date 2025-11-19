@@ -12,8 +12,6 @@ from .models import TagCreate, TagUpdate, TagResponse, TagImportResult, Paginate
 from .dependencies import get_db, PaginationParams, log_crud_operation
 from .exceptions import raise_not_found
 from src.database.validators import (
-    validate_plc_exists,
-    validate_process_exists,
     validate_polling_group_exists
 )
 import pandas as pd
@@ -32,8 +30,8 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
     """
     Create a new PLC tag
 
-    - **plc_id**: ID of PLC connection (must exist)
-    - **process_id**: ID of process (must exist)
+    - **plc_code**: PLC code (must not be empty)
+    - **workstage_code**: Workstage code (must not be empty)
     - **tag_address**: Tag address (max 20 chars, e.g., D100, W200)
     - **tag_name**: Tag name (max 200 chars)
     - **tag_division**: Optional division (max 50 chars)
@@ -46,9 +44,15 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
 
     Returns created tag with id, created_at, updated_at
     """
-    # Validate foreign keys
-    validate_plc_exists(db, tag.plc_id)
-    validate_process_exists(db, tag.process_id)
+    # Validate codes are not empty
+    if not tag.plc_code or not tag.plc_code.strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="plc_code cannot be empty")
+
+    if not tag.workstage_code or not tag.workstage_code.strip():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="workstage_code cannot be empty")
+
     if tag.polling_group_id is not None:
         validate_polling_group_exists(db, tag.polling_group_id)
 
@@ -61,12 +65,12 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO tags (
-                plc_id, polling_group_id, tag_address, tag_name, tag_type,
-                unit, scale, machine_code, log_mode, description, is_active
+                plc_code, polling_group_id, tag_address, tag_name, tag_type,
+                unit, scale, machine_code, log_mode, description, is_active, workstage_code
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            tag.plc_id,
+            tag.plc_code.strip(),
             tag.polling_group_id,
             tag.tag_address,
             tag.tag_name,
@@ -76,7 +80,8 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
             tag.machine_code,
             tag.log_mode,  # log_mode
             tag.tag_division,  # description
-            is_active  # is_active (unknown이면 False)
+            is_active,  # is_active (unknown이면 False)
+            tag.workstage_code.strip()
         ))
         conn.commit()
         tag_id = cursor.lastrowid
@@ -94,8 +99,8 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
 
 @router.get("", response_model=PaginatedResponse[TagResponse])
 def list_tags(
-    plc_id: Optional[int] = None,
-    process_id: Optional[int] = None,
+    plc_code: Optional[str] = None,
+    workstage_code: Optional[str] = None,
     polling_group_id: Optional[int] = None,
     tag_category: Optional[str] = None,
     is_active: Optional[bool] = None,
@@ -105,8 +110,8 @@ def list_tags(
     """
     List all tags with pagination and filters
 
-    - **plc_id**: Optional filter by PLC ID
-    - **process_id**: Optional filter by process ID
+    - **plc_code**: Optional filter by PLC code
+    - **workstage_code**: Optional filter by workstage code
     - **polling_group_id**: Optional filter by polling group ID
     - **tag_category**: Optional filter by tag category (tag type)
     - **is_active**: Optional filter by active status (true/false)
@@ -119,12 +124,12 @@ def list_tags(
     conditions = []
     params = []
 
-    if plc_id:
-        conditions.append("t.plc_id = ?")
-        params.append(plc_id)
-    if process_id:
-        conditions.append("t.process_id = ?")
-        params.append(process_id)
+    if plc_code:
+        conditions.append("t.plc_code = ?")
+        params.append(plc_code)
+    if workstage_code:
+        conditions.append("t.workstage_code = ?")
+        params.append(workstage_code)
     if polling_group_id:
         conditions.append("t.polling_group_id = ?")
         params.append(polling_group_id)
@@ -143,15 +148,12 @@ def list_tags(
         cursor.execute(f"SELECT COUNT(*) FROM tags t {where_clause}", params)
         total_count = cursor.fetchone()[0]
 
-    # Get paginated tags with PLC code
+    # Get paginated tags
     with db.get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(f"""
-            SELECT
-                t.*,
-                p.plc_code
+            SELECT t.*
             FROM tags t
-            LEFT JOIN plc_connections p ON t.plc_id = p.id
             {where_clause}
             ORDER BY t.id DESC
             LIMIT ? OFFSET ?
@@ -233,9 +235,8 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
     This endpoint:
     1. Fetches all active tags (TAG_USE_YN='Y') from Oracle ICOM_PLC_TAG_MASTER
     2. For each Oracle tag:
-       - Looks up plc_id from plc_code
-       - Looks up process_id from machine_code
-       - If tag exists (by plc_id + tag_address): UPDATE
+       - Uses plc_code, workstage_code, machine_code directly from Oracle
+       - If tag exists (by plc_code + tag_address): UPDATE
        - If tag doesn't exist: INSERT
     3. Returns sync statistics
 
@@ -262,10 +263,6 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
         oracle_tags = get_oracle_tags()
         logger.info(f"Fetched {len(oracle_tags)} tags from Oracle")
 
-        # Build lookup dictionaries
-        plc_lookup = _build_plc_lookup(db)
-        process_lookup = _build_process_lookup(db)
-
         created_count = 0
         updated_count = 0
         skipped_count = 0
@@ -277,6 +274,7 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
 
             for oracle_tag in oracle_tags:
                 plc_code = oracle_tag['plc_code']
+                workstage_code = oracle_tag.get('workstage_code')
                 machine_code = oracle_tag.get('machine_code')
                 tag_address = oracle_tag['tag_address']
                 tag_name = oracle_tag['tag_name'] or 'UNKNOWN'  # NULL 값을 'UNKNOWN'으로 대체
@@ -288,22 +286,25 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                 max_value = oracle_tag.get('max_value')
 
                 try:
-                    # Lookup plc_id
-                    plc_id = plc_lookup.get(plc_code)
-                    if not plc_id:
+                    # Validate required codes
+                    if not plc_code or not plc_code.strip():
                         error_count += 1
-                        error_msg = f"PLC not found for tag {tag_address}: {plc_code}"
+                        error_msg = f"Missing plc_code for tag {tag_address}"
                         error_details.append(error_msg)
                         logger.warning(error_msg)
                         continue
 
-                    # Lookup process_id (optional)
-                    process_id = process_lookup.get(machine_code) if machine_code else None
+                    if not workstage_code or not workstage_code.strip():
+                        error_count += 1
+                        error_msg = f"Missing workstage_code for tag {tag_address}"
+                        error_details.append(error_msg)
+                        logger.warning(error_msg)
+                        continue
 
                     # Check if tag exists
                     cursor.execute(
-                        "SELECT id FROM tags WHERE plc_id = ? AND tag_address = ?",
-                        (plc_id, tag_address)
+                        "SELECT id FROM tags WHERE plc_code = ? AND tag_address = ?",
+                        (plc_code, tag_address)
                     )
                     existing = cursor.fetchone()
 
@@ -321,12 +322,13 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                                 scale = ?,
                                 min_value = ?,
                                 max_value = ?,
-                                process_id = ?,
+                                machine_code = ?,
+                                workstage_code = ?,
                                 is_active = ?,
                                 updated_at = CURRENT_TIMESTAMP
-                            WHERE plc_id = ? AND tag_address = ?
+                            WHERE plc_code = ? AND tag_address = ?
                         """, (tag_name, tag_category, tag_type, unit, scale, min_value, max_value,
-                              process_id, is_active, plc_id, tag_address))
+                              machine_code, workstage_code, is_active, plc_code, tag_address))
                         updated_count += 1
                         logger.debug(f"Updated tag: {plc_code}/{tag_address}")
 
@@ -334,11 +336,11 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                         # INSERT new tag
                         cursor.execute("""
                             INSERT INTO tags
-                            (plc_id, process_id, tag_address, tag_name, tag_category, tag_type,
-                             unit, scale, min_value, max_value, is_active)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (plc_id, process_id, tag_address, tag_name, tag_category, tag_type,
-                              unit, scale, min_value, max_value, is_active))
+                            (plc_code, workstage_code, tag_address, tag_name, tag_category, tag_type,
+                             unit, scale, min_value, max_value, machine_code, is_active)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (plc_code, workstage_code, tag_address, tag_name, tag_category, tag_type,
+                              unit, scale, min_value, max_value, machine_code, is_active))
                         created_count += 1
                         logger.debug(f"Created tag: {plc_code}/{tag_address}")
 
@@ -390,14 +392,7 @@ def get_tag(tag_id: int, db: SQLiteManager = Depends(get_db)):
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT
-                t.*,
-                p.plc_code
-            FROM tags t
-            LEFT JOIN plc_connections p ON t.plc_id = p.id
-            WHERE t.id = ?
-        """, (tag_id,))
+        cursor.execute("SELECT * FROM tags WHERE id = ?", (tag_id,))
         row = cursor.fetchone()
 
     if not row:
@@ -577,8 +572,8 @@ async def import_tags_csv(
     Import tags from CSV file
 
     CSV format (columns):
-    - PLC_CODE: PLC code (required) - will be resolved to plc_id
-    - PROCESS_CODE: Process code (required) - will be resolved to process_id
+    - PLC_CODE: PLC code (required)
+    - WORKSTAGE_CODE: Workstage code (required)
     - TAG_ADDRESS: Tag address (required, max 20 chars)
     - TAG_NAME: Tag name (required, max 200 chars)
     - TAG_DIVISION: Division (optional, max 50 chars)
@@ -604,7 +599,7 @@ async def import_tags_csv(
         df = pd.read_csv(io.BytesIO(contents))
 
         # Validate required columns
-        required_cols = ['PLC_CODE', 'PROCESS_CODE', 'TAG_ADDRESS', 'TAG_NAME']
+        required_cols = ['PLC_CODE', 'WORKSTAGE_CODE', 'TAG_ADDRESS', 'TAG_NAME']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             return TagImportResult(
@@ -612,12 +607,6 @@ async def import_tags_csv(
                 failure_count=len(df),
                 errors=[{"row": 0, "error": f"Missing required columns: {', '.join(missing_cols)}"}]
             )
-
-        # Build PLC_CODE → plc_id lookup
-        plc_lookup = _build_plc_lookup(db)
-
-        # Build PROCESS_CODE → process_id lookup
-        process_lookup = _build_process_lookup(db)
 
         # Process in chunks of 1000
         chunk_size = 1000
@@ -634,21 +623,20 @@ async def import_tags_csv(
                 row_num = idx + 2  # CSV row number (1-indexed, +1 for header)
 
                 try:
-                    # Resolve PLC_CODE to plc_id
+                    # Get codes directly
                     plc_code = str(row['PLC_CODE']).strip()
-                    if plc_code not in plc_lookup:
-                        errors.append({"row": row_num, "error": f"PLC_CODE '{plc_code}' not found"})
-                        failure_count += 1
-                        continue
-                    plc_id = plc_lookup[plc_code]
+                    workstage_code = str(row['WORKSTAGE_CODE']).strip()
 
-                    # Resolve PROCESS_CODE to process_id
-                    process_code = str(row['PROCESS_CODE']).strip()
-                    if process_code not in process_lookup:
-                        errors.append({"row": row_num, "error": f"PROCESS_CODE '{process_code}' not found"})
+                    # Validate codes are not empty
+                    if not plc_code:
+                        errors.append({"row": row_num, "error": "PLC_CODE cannot be empty"})
                         failure_count += 1
                         continue
-                    process_id = process_lookup[process_code]
+
+                    if not workstage_code:
+                        errors.append({"row": row_num, "error": "WORKSTAGE_CODE cannot be empty"})
+                        failure_count += 1
+                        continue
 
                     # Extract fields
                     tag_address = str(row['TAG_ADDRESS']).strip()
@@ -665,8 +653,8 @@ async def import_tags_csv(
                         enabled = 0
 
                     batch_data.append((
-                        plc_id, None, tag_address, tag_name, data_type,
-                        unit, scale, machine_code, tag_division, enabled
+                        plc_code, None, tag_address, tag_name, data_type,
+                        unit, scale, machine_code, tag_division, enabled, workstage_code
                     ))
 
                 except Exception as e:
@@ -680,10 +668,10 @@ async def import_tags_csv(
                         cursor = conn.cursor()
                         cursor.executemany("""
                             INSERT INTO tags (
-                                plc_id, polling_group_id, tag_address, tag_name, tag_type,
-                                unit, scale, machine_code, description, is_active
+                                plc_code, polling_group_id, tag_address, tag_name, tag_type,
+                                unit, scale, machine_code, description, is_active, workstage_code
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, batch_data)
                         conn.commit()
                         success_count += len(batch_data)
@@ -697,10 +685,10 @@ async def import_tags_csv(
                                 cursor = conn.cursor()
                                 cursor.execute("""
                                     INSERT INTO tags (
-                                        plc_id, polling_group_id, tag_address, tag_name, tag_type,
-                                        unit, scale, machine_code, description, is_active
+                                        plc_code, polling_group_id, tag_address, tag_name, tag_type,
+                                        unit, scale, machine_code, description, is_active, workstage_code
                                     )
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """, data)
                                 conn.commit()
                                 success_count += 1
@@ -731,11 +719,15 @@ async def import_tags_csv(
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse"""
-    # Row format: (id, plc_id, process_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, polling_group_id, description, is_active, last_value, last_updated_at, created_at, updated_at, tag_category, plc_code)
+    # Row format with new schema (plc_code, workstage_code):
+    # (0:id, 1:plc_code, 2:workstage_code, 3:tag_address, 4:tag_name, 5:tag_type, 6:unit,
+    #  7:scale, 8:offset, 9:min_value, 10:max_value, 11:polling_group_id, 12:description,
+    #  13:is_active, 14:last_value, 15:last_updated_at, 16:created_at, 17:updated_at,
+    #  18:tag_category, 19:log_mode, 20:machine_code)
     return TagResponse(
         id=row[0],
-        plc_id=row[1],
-        process_id=row[2] if row[2] else 0,
+        plc_code=row[1] if row[1] else '',
+        workstage_code=row[2] if row[2] else '',
         tag_address=row[3],
         tag_name=row[4],
         tag_division=row[12] if row[12] else '',  # description
@@ -743,26 +735,9 @@ def _row_to_tag_response(row) -> TagResponse:
         data_type=row[5],  # tag_type
         unit=str(row[6]) if row[6] else None,
         scale=float(row[7]) if row[7] is not None else 1.0,
-        machine_code=None,  # Not in current schema
+        machine_code=row[20] if len(row) > 20 and row[20] else None,  # machine_code
         polling_group_id=row[11],
         enabled=bool(row[13]),  # is_active
-        plc_code=row[19] if len(row) > 19 and row[19] else None,  # plc_code from JOIN
         created_at=row[16] if row[16] else datetime.now().isoformat(),
         updated_at=row[17] if row[17] else datetime.now().isoformat()
     )
-
-
-def _build_plc_lookup(db: SQLiteManager) -> dict:
-    """Build PLC_CODE → plc_id lookup dictionary"""
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, plc_code FROM plc_connections")
-        return {row[1]: row[0] for row in cursor.fetchall()}
-
-
-def _build_process_lookup(db: SQLiteManager) -> dict:
-    """Build PROCESS_CODE → process_id lookup dictionary"""
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, process_code FROM processes")
-        return {row[1]: row[0] for row in cursor.fetchall()}

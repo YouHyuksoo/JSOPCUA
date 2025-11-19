@@ -1,8 +1,7 @@
 export interface Tag {
   id: number;
-  plc_id: number;
-  plc_code?: string | null;  // PLC code from plc_connections
-  process_id: number;
+  plc_code: string;
+  workstage_code?: string | null;
   tag_address: string;
   tag_name: string;
   tag_division: string;
@@ -20,8 +19,8 @@ export interface Tag {
 }
 
 export interface CreateTagRequest {
-  plc_id: number;
-  process_id: number;
+  plc_code: string;
+  workstage_code?: string;
   tag_address: string;
   tag_name: string;
   tag_division?: string;

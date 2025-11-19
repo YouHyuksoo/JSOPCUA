@@ -19,7 +19,7 @@ import {
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "설비 (Machines)", href: "/machines", icon: Database },
-  { name: "공정 (Processes)", href: "/processes", icon: Network },
+  { name: "공정 (Workstages)", href: "/workstages", icon: Network },
   { name: "PLCs", href: "/plcs", icon: Server },
   { name: "Tags", href: "/tags", icon: Tags },
   { name: "Polling Groups", href: "/polling-groups", icon: PlayCircle },

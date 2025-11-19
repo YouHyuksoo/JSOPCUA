@@ -8,7 +8,7 @@ export default function Nav() {
           <Link href="/" className="text-xl font-bold">JSScada Admin</Link>
           <div className="flex gap-4">
             <Link href="/lines" className="hover:underline">라인</Link>
-            <Link href="/processes" className="hover:underline">공정</Link>
+            <Link href="/workstages" className="hover:underline">공정</Link>
             <Link href="/plcs" className="hover:underline">PLC</Link>
             <Link href="/tags" className="hover:underline">태그</Link>
             <Link href="/polling-groups" className="hover:underline">폴링그룹</Link>

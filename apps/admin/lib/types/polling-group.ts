@@ -1,6 +1,8 @@
 export interface PollingGroup {
   id: number;
   name: string;
+  plc_code: string;
+  workstage_code?: string | null;
   polling_interval: number;
   is_active: boolean;
   status: "stopped" | "running" | "error";
@@ -13,6 +15,8 @@ export interface PollingGroup {
 
 export interface CreatePollingGroupRequest {
   name: string;
+  plc_code: string;
+  workstage_code?: string;
   polling_interval: number;
   is_active: boolean;
   tag_ids: number[];

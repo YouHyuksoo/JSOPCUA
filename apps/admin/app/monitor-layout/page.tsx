@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { getEquipmentPositions, saveEquipmentPositions, EquipmentPosition, getTagsForMonitor, TagForMonitor } from '@/lib/api/monitor';
-import { getProcesses } from '@/lib/api/processes';
-import { Process } from '@/lib/types/process';
+import { getWorkstages } from '@/lib/api/workstages';
+import { Workstage } from '@/lib/types/workstage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -29,7 +29,7 @@ interface DraggableBox {
 }
 
 export default function MonitorLayoutPage() {
-  const [processes, setProcesses] = useState<Process[]>([]);
+  const [processes, setProcesses] = useState<Workstage[]>([]);
   const [boxes, setBoxes] = useState<DraggableBox[]>([]);
   const [tags, setTags] = useState<TagForMonitor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,7 +46,7 @@ export default function MonitorLayoutPage() {
   useEffect(() => {
     const fetchProcesses = async () => {
       try {
-        const data = await getProcesses(1, 100);
+        const data = await getWorkstages(1, 100);
         setProcesses(data.items);
       } catch (error) {
         toast.error('공정 목록 조회 실패');
@@ -76,10 +76,10 @@ export default function MonitorLayoutPage() {
         
         // 공정 목록과 위치 정보를 결합
         const initialBoxes: DraggableBox[] = processes.map((process) => {
-          const position = positionsData.positions[process.process_code];
+          const position = positionsData.positions[process.workstage_code];
           return {
-            process_code: process.process_code,
-            process_name: process.process_name,
+            process_code: process.workstage_code,
+            process_name: process.workstage_name,
             position_x: position?.position_x || 0,
             position_y: position?.position_y || 0,
             width: position?.width || 120,
@@ -100,8 +100,8 @@ export default function MonitorLayoutPage() {
         console.error('위치 정보 조회 실패:', error);
         // 위치 정보가 없으면 기본값으로 생성
         const defaultBoxes: DraggableBox[] = processes.map((process, index) => ({
-          process_code: process.process_code,
-          process_name: process.process_name,
+          process_code: process.workstage_code,
+          process_name: process.workstage_name,
           position_x: (index % 5) * 140 + 20,
           position_y: Math.floor(index / 5) * 100 + 20,
           width: 120,

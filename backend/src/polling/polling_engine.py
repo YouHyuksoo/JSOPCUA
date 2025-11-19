@@ -114,9 +114,8 @@ class PollingEngine:
             # Load polling groups with PLC info
             cursor.execute("""
                 SELECT pg.id, pg.group_name, pg.polling_mode, pg.polling_interval_ms,
-                       pg.group_category, pg.is_active, pg.plc_id, pc.plc_code
+                       pg.group_category, pg.is_active, pg.plc_code
                 FROM polling_groups pg
-                LEFT JOIN plc_connections pc ON pg.plc_id = pc.id
                 ORDER BY pg.id
             """)
 
@@ -125,19 +124,19 @@ class PollingEngine:
 
             for row in rows:
                 # Skip if no PLC assigned
-                if not row['plc_id'] or not row['plc_code']:
+                if not row['plc_code']:
                     logger.warning(f"Polling group {row['group_name']} has no PLC assigned, skipping")
                     continue
 
-                # Load tags for this group (must match both polling_group_id and plc_id)
+                # Load tags for this group (must match both polling_group_id and plc_code)
                 cursor.execute("""
                     SELECT tag_address
                     FROM tags
                     WHERE polling_group_id = ?
-                      AND plc_id = ?
+                      AND plc_code = ?
                       AND is_active = 1
                     ORDER BY tag_address
-                """, (row['id'], row['plc_id']))
+                """, (row['id'], row['plc_code']))
 
                 tag_rows = cursor.fetchall()
 

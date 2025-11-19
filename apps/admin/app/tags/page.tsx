@@ -274,6 +274,7 @@ export default function TagsPage() {
                   <TableHead className="text-gray-400">태그 이름</TableHead>
                   <TableHead className="text-gray-400">태그 타입</TableHead>
                   <TableHead className="text-gray-400">데이터 타입</TableHead>
+                  <TableHead className="text-gray-400">설비코드</TableHead>
                   <TableHead className="text-gray-400">PLC 코드</TableHead>
                   <TableHead className="text-gray-400">상태</TableHead>
                   <TableHead className="text-gray-400 text-right">작업</TableHead>
@@ -282,7 +283,7 @@ export default function TagsPage() {
               <TableBody>
                 {filteredTags.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-gray-500 py-8">
+                    <TableCell colSpan={9} className="text-center text-gray-500 py-8">
                       태그가 없습니다
                     </TableCell>
                   </TableRow>
@@ -301,6 +302,15 @@ export default function TagsPage() {
                       <TableCell className="text-white font-semibold">{tag.tag_name}</TableCell>
                       <TableCell className="text-gray-400">{tag.tag_category || '-'}</TableCell>
                       <TableCell>{getDataTypeBadge(tag.data_type)}</TableCell>
+                      <TableCell className="text-gray-300">
+                        {tag.machine_code ? (
+                          <span className="px-2 py-1 bg-orange-500/10 text-orange-400 rounded text-xs font-mono">
+                            {tag.machine_code}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500">-</span>
+                        )}
+                      </TableCell>
                       <TableCell className="text-gray-300">
                         {tag.plc_code ? (
                           <span className="px-2 py-1 bg-indigo-500/10 text-indigo-400 rounded text-xs font-mono">

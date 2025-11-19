@@ -84,7 +84,7 @@ export default function EditPLCPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      <Card className="bg-gray-900 border-gray-800 max-w-2xl">
+      <Card className="bg-gray-900 border-gray-800 max-w-5xl mx-auto">
         <CardHeader>
           <CardTitle className="text-white">PLC 정보</CardTitle>
         </CardHeader>

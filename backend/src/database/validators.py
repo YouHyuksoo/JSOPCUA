@@ -13,12 +13,12 @@ from src.api.exceptions import ForeignKeyError, ValidationError
 
 
 # ==============================================================================
-# Process Code Validation
+# Workstage (공정) Code Validation
 # ==============================================================================
 
-def validate_process_code(code: str) -> bool:
+def validate_workstage_code(code: str) -> bool:
     """
-    Validate 14-character process code format
+    Validate 14-character workstage code format
 
     Format: [A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3}
     Example: KRCWO12ELOA101
@@ -30,7 +30,7 @@ def validate_process_code(code: str) -> bool:
     - 101: Sequence (3 digits)
 
     Args:
-        code: Process code to validate
+        code: Workstage code to validate
 
     Returns:
         True if valid
@@ -40,15 +40,15 @@ def validate_process_code(code: str) -> bool:
     """
     if len(code) != 14:
         raise ValidationError(
-            message="Invalid process code",
-            detail=f"process_code must be exactly 14 characters, got {len(code)}"
+            message="Invalid workstage code",
+            detail=f"workstage_code must be exactly 14 characters, got {len(code)}"
         )
 
     pattern = r'^[A-Z]{2}[A-Z]{3}\d{2}[A-Z]{3}[A-Z]\d{3}$'
     if not re.match(pattern, code):
         raise ValidationError(
-            message="Invalid process code format",
-            detail="process_code must match pattern: [A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3}"
+            message="Invalid workstage code format",
+            detail="workstage_code must match pattern: [A-Z]{2}[A-Z]{3}\\d{2}[A-Z]{3}[A-Z]\\d{3}"
         )
 
     return True
@@ -113,38 +113,41 @@ def validate_machine_exists(db: SQLiteManager, machine_code: str) -> bool:
     return True
 
 
-def validate_process_exists(db: SQLiteManager, process_id: int) -> bool:
+def validate_workstage_exists(db: SQLiteManager, workstage_code: str) -> bool:
     """
-    Validate that process exists
+    Validate that workstage exists
 
     Args:
         db: Database manager
-        process_id: Process ID to check
+        workstage_code: Workstage code to check
 
     Returns:
         True if exists
 
     Raises:
-        ForeignKeyError: If process not found
+        ForeignKeyError: If workstage not found
     """
+    if workstage_code is None:
+        return True  # workstage_code is optional
+
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM processes WHERE id = ?", (process_id,))
+        cursor.execute("SELECT workstage_code FROM workstages WHERE workstage_code = ?", (workstage_code,))
         if not cursor.fetchone():
             raise ForeignKeyError(
-                message="Process not found",
-                detail=f"process_id {process_id} not found"
+                message="Workstage not found",
+                detail=f"workstage_code '{workstage_code}' not found"
             )
     return True
 
 
-def validate_plc_exists(db: SQLiteManager, plc_id: int) -> bool:
+def validate_plc_exists(db: SQLiteManager, plc_code: str) -> bool:
     """
     Validate that PLC connection exists
 
     Args:
         db: Database manager
-        plc_id: PLC ID to check
+        plc_code: PLC code to check
 
     Returns:
         True if exists
@@ -154,11 +157,11 @@ def validate_plc_exists(db: SQLiteManager, plc_id: int) -> bool:
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT id FROM plc_connections WHERE id = ?", (plc_id,))
+        cursor.execute("SELECT plc_code FROM plc_connections WHERE plc_code = ?", (plc_code,))
         if not cursor.fetchone():
             raise ForeignKeyError(
                 message="PLC connection not found",
-                detail=f"plc_id {plc_id} not found"
+                detail=f"plc_code '{plc_code}' not found"
             )
     return True
 
@@ -225,35 +228,35 @@ def validate_machine_code_unique(db: SQLiteManager, machine_code: str, exclude_i
     return True
 
 
-def validate_process_code_unique(db: SQLiteManager, process_code: str, exclude_id: Optional[int] = None) -> bool:
+def validate_workstage_code_unique(db: SQLiteManager, workstage_code: str, exclude_id: Optional[int] = None) -> bool:
     """
-    Validate that process_code is unique
+    Validate that workstage_code is unique
 
     Args:
         db: Database manager
-        process_code: Process code to check
+        workstage_code: Workstage code to check
         exclude_id: Optional ID to exclude (for updates)
 
     Returns:
         True if unique
 
     Raises:
-        ValidationError: If process_code already exists
+        ValidationError: If workstage_code already exists
     """
     with db.get_connection() as conn:
         cursor = conn.cursor()
         if exclude_id:
             cursor.execute(
-                "SELECT id FROM processes WHERE process_code = ? AND id != ?",
-                (process_code, exclude_id)
+                "SELECT id FROM workstages WHERE workstage_code = ? AND id != ?",
+                (workstage_code, exclude_id)
             )
         else:
-            cursor.execute("SELECT id FROM processes WHERE process_code = ?", (process_code,))
+            cursor.execute("SELECT id FROM workstages WHERE workstage_code = ?", (workstage_code,))
 
         if cursor.fetchone():
             raise ValidationError(
-                message="Duplicate process code",
-                detail=f"process_code '{process_code}' already exists"
+                message="Duplicate workstage code",
+                detail=f"workstage_code '{workstage_code}' already exists"
             )
     return True
 

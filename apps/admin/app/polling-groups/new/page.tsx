@@ -28,9 +28,26 @@ export default function NewPollingGroupPage() {
 
   const handleSubmit = async (data: PollingGroupFormData) => {
     try {
+      // 선택된 태그들로부터 PLC 코드 추출
+      const selectedTags = tags.filter(tag => data.tag_ids.includes(tag.id));
+      const plcCodes = new Set(selectedTags.map(tag => tag.plc_code).filter(Boolean));
+
+      if (plcCodes.size === 0) {
+        toast.error('선택된 태그에 PLC 코드가 없습니다');
+        return;
+      }
+
+      if (plcCodes.size > 1) {
+        toast.error('선택된 태그들이 서로 다른 PLC에 속해 있습니다. 같은 PLC의 태그만 선택해주세요.');
+        return;
+      }
+
+      const plc_code = Array.from(plcCodes)[0] as string;
+
       // Convert form data to API request format
       await createPollingGroup({
         name: data.name,
+        plc_code: plc_code,
         polling_interval: data.polling_interval_ms,
         is_active: true,
         tag_ids: data.tag_ids,

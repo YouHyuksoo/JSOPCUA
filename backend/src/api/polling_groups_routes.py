@@ -33,8 +33,8 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
 
     - **group_name**: Group name (max 200 chars)
     - **machine_code**: Optional machine code filter (max 50 chars)
-    - **process_code**: Optional process code filter (max 50 chars)
-    - **plc_id**: ID of PLC connection (must exist)
+    - **workstage_code**: Optional workstage code filter
+    - **plc_code**: PLC code (must exist)
     - **mode**: Polling mode (FIXED or HANDSHAKE, default: FIXED)
     - **interval_ms**: Polling interval in milliseconds (default: 1000)
     - **trigger_bit_address**: Trigger bit address (required for HANDSHAKE mode)
@@ -46,7 +46,7 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
     Returns created polling group with id, created_at, updated_at
     """
     # Validate foreign key
-    validate_plc_exists(db, group.plc_id)
+    validate_plc_exists(db, group.plc_code)
 
     # Validate polling mode and trigger configuration
     validate_polling_mode(group.mode, group.trigger_bit_address)
@@ -55,7 +55,7 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO polling_groups (
-                group_name, polling_mode, polling_interval_ms, group_category, description, is_active, plc_id
+                group_name, polling_mode, polling_interval_ms, group_category, description, is_active, plc_code
             )
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
@@ -63,9 +63,9 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
             group.mode,  # polling_mode
             group.interval_ms,  # polling_interval_ms
             group.group_category,  # group_category
-            f"Line: {group.line_code or 'N/A'}, Process: {group.process_code or 'N/A'}",  # description
+            f"Line: {group.line_code or 'N/A'}, Workstage: {group.workstage_code or 'N/A'}",  # description
             group.enabled,  # is_active
-            group.plc_id
+            group.plc_code
         ))
         group_id = cursor.lastrowid
 
@@ -93,23 +93,23 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
 
 @router.get("", response_model=PaginatedResponse[PollingGroupResponse])
 def list_polling_groups(
-    plc_id: int = None,
+    plc_code: str = None,
     pagination: PaginationParams = Depends(),
     db: SQLiteManager = Depends(get_db)
 ):
     """
     List all polling groups with pagination
 
-    - **plc_id**: Optional filter by PLC ID
+    - **plc_code**: Optional filter by PLC code
     - **page**: Page number (default: 1)
     - **limit**: Items per page (default: 50, max: 1000)
 
     Returns paginated list of polling groups
     """
     # Build query
-    where_clause = "WHERE plc_id = ?" if plc_id else ""
-    params_count = (plc_id,) if plc_id else ()
-    params_list = (plc_id, pagination.limit, pagination.skip) if plc_id else (pagination.limit, pagination.skip)
+    where_clause = "WHERE plc_code = ?" if plc_code else ""
+    params_count = (plc_code,) if plc_code else ()
+    params_list = (plc_code, pagination.limit, pagination.skip) if plc_code else (pagination.limit, pagination.skip)
 
     # Get total count
     with db.get_connection() as conn:
@@ -497,8 +497,10 @@ def delete_polling_group(group_id: int, db: SQLiteManager = Depends(get_db)):
 
 def _row_to_polling_group_response(row) -> PollingGroupResponse:
     """Convert database row to PollingGroupResponse"""
-    # Row format: (id, group_name, plc_id, polling_mode, polling_interval_ms, trigger_bit_address,
-    #              trigger_bit_offset, auto_reset_trigger, priority, description, is_active, created_at, updated_at)
+    # Row format after migration with group_category:
+    # (0:id, 1:group_name, 2:plc_code, 3:polling_mode, 4:polling_interval_ms, 5:group_category,
+    #  6:trigger_bit_address, 7:trigger_bit_offset, 8:auto_reset_trigger, 9:priority,
+    #  10:description, 11:is_active, 12:created_at, 13:updated_at)
     group_id = row[0]
 
     # Count tags in this polling group
@@ -514,17 +516,18 @@ def _row_to_polling_group_response(row) -> PollingGroupResponse:
         group_name=row[1],
         line_code=None,  # Legacy field, not in DB
         machine_code=None,  # Not in DB
-        process_code=None,  # Not in DB
-        plc_id=row[2],
+        workstage_code=None,  # Not in DB
+        plc_code=row[2],
         mode=row[3],  # polling_mode
         interval_ms=row[4],  # polling_interval_ms
-        trigger_bit_address=row[5],
-        trigger_bit_offset=row[6],
-        auto_reset_trigger=bool(row[7]),
-        priority=row[8],
-        enabled=bool(row[10]),  # is_active
-        created_at=row[11],
-        updated_at=row[12],
+        group_category=row[5],  # group_category (OPERATION, STATE, ALARM)
+        trigger_bit_address=row[6],
+        trigger_bit_offset=row[7] if row[7] is not None else 0,  # Default to 0 if None
+        auto_reset_trigger=bool(row[8]),
+        priority=row[9],
+        enabled=bool(row[11]),  # is_active
+        created_at=row[12],
+        updated_at=row[13],
         tag_count=tag_count,
         status="stopped"  # Default status, will be updated by polling engine
     )
@@ -532,12 +535,11 @@ def _row_to_polling_group_response(row) -> PollingGroupResponse:
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse (for /tags endpoint)"""
-    # Row format: (id, plc_id, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
+    # Row format: (id, plc_code, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
     from datetime import datetime
     return TagResponse(
         id=row[0],
-        plc_id=row[1],
-        process_id=0,  # Not in DB - use default
+        plc_code=row[1],
         tag_address=row[3],
         tag_name=row[4],
         tag_division=row[12] if row[12] else '',  # description
