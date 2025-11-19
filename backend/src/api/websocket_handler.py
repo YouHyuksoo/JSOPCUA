@@ -8,9 +8,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import Set, Optional
 import asyncio
 import json
+import logging
 from datetime import datetime
 
 from src.polling.polling_engine import PollingEngine
+
+logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -71,7 +74,7 @@ class ConnectionManager:
 
             await websocket.send_json(status_data)
         except Exception as e:
-            print(f"Error sending status to WebSocket: {e}")
+            logger.error(f"Error sending status to WebSocket: {e}")
 
     async def broadcast_status(self):
         """Broadcast current engine status to all connections"""
@@ -105,14 +108,14 @@ class ConnectionManager:
                 try:
                     await connection.send_json(status_data)
                 except Exception as e:
-                    print(f"Error broadcasting to WebSocket: {e}")
+                    logger.error(f"Error broadcasting to WebSocket: {e}")
                     dead_connections.add(connection)
 
             # Remove dead connections
             self.active_connections -= dead_connections
 
         except Exception as e:
-            print(f"Error broadcasting status: {e}")
+            logger.error(f"Error broadcasting status: {e}")
 
     async def _broadcast_loop(self):
         """Background task to periodically broadcast status"""
@@ -174,6 +177,6 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         pass
     except Exception as e:
-        print(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}")
     finally:
         manager.disconnect(websocket)

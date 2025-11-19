@@ -1,20 +1,20 @@
 """
 Logging Configuration for SCADA System
 
-폴링 로그 설정 (일자별 로테이션):
-- 일반 로그: logs/scada.log (INFO 레벨) - 자정마다 scada.log.YYYYMMDD로 백업
-- 에러 로그: logs/error.log (ERROR 레벨) - 자정마다 error.log.YYYYMMDD로 백업
-- 통신 로그: logs/communication.log (PLC 통신 전용) - 자정마다 백업
-- 성능 로그: logs/performance.log (폴링 성능 메트릭) - 자정마다 백업
-- PLC 로그: logs/plc.log (PLC 관련) - 자정마다 백업
-- 폴링 로그: logs/polling.log (폴링 엔진) - 자정마다 백업
-- Oracle 로그: logs/oracle_writer.log (Oracle 연동) - 자정마다 백업
+폴링 로그 설정 (크기 기반 로테이션 - 멀티프로세스 안전):
+- 일반 로그: logs/scada.log (INFO 레벨) - 10MB 도달 시 백업
+- 에러 로그: logs/error.log (ERROR 레벨) - 10MB 도달 시 백업
+- 통신 로그: logs/communication.log (PLC 통신 전용) - 10MB 도달 시 백업
+- 성능 로그: logs/performance.log (폴링 성능 메트릭) - 10MB 도달 시 백업
+- PLC 로그: logs/plc.log (PLC 관련) - 10MB 도달 시 백업
+- 폴링 로그: logs/polling.log (폴링 엔진) - 10MB 도달 시 백업
+- Oracle 로그: logs/oracle_writer.log (Oracle 연동) - 10MB 도달 시 백업
 - 실패 로그: logs/polling_failures/YYYYMMDD/*.log (일자별 폴더)
 
 로그 로테이션:
-- 자정(midnight)마다 자동 로테이션
-- 백업 파일명 형식: {파일명}.YYYYMMDD (예: scada.log.20250112)
-- 최대 백업 개수: LOG_BACKUP_COUNT (기본값: 10일)
+- 파일 크기(10MB) 도달 시 자동 로테이션 (ConcurrentLogHandler)
+- 백업 파일명 형식: {파일명}.1, {파일명}.2 ... (예: scada.log.1)
+- 최대 백업 개수: LOG_BACKUP_COUNT (기본값: 10개)
 
 터미널 로그 레벨 설정:
 - 환경변수 LOG_LEVEL로 제어 (DEBUG, INFO, WARNING, ERROR, CRITICAL)
@@ -23,6 +23,7 @@ Logging Configuration for SCADA System
 
 import logging
 import logging.handlers
+from concurrent_log_handler import ConcurrentRotatingFileHandler
 from pathlib import Path
 from datetime import datetime
 
@@ -176,21 +177,21 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     # 현재 로그 레벨 출력
     level_name = logging.getLevelName(console_level)
     source = ".env file" if console_level == get_log_level_from_settings() else "parameter"
-    print(f"[Logging] Console log level: {level_name} (from {source})")
-    print(f"[Logging] Log directory: {log_path.absolute()}")
-    print(f"[Logging] Colors enabled: {use_colors}")
+    logging.info(f"[Logging] Console log level: {level_name} (from {source})")
+    logging.info(f"[Logging] Log directory: {log_path.absolute()}")
+    logging.info(f"[Logging] Colors enabled: {use_colors}")
 
     # =========================================================================
-    # 2. General Log File (scada.log) - INFO 레벨 (일자별 로테이션)
+    # 2. General Log File (scada.log) - INFO 레벨 (크기 기반 로테이션)
     # =========================================================================
-    general_handler = logging.handlers.TimedRotatingFileHandler(
+    general_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "scada.log",
-        when='midnight',  # 자정마다 로테이션
-        interval=1,       # 1일마다
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    general_handler.suffix = "%Y%m%d"  # 백업 파일명: scada.log.20250112
+    # general_handler.suffix = "%Y%m%d"  # ConcurrentRotatingFileHandler는 날짜 기반 suffix를 지원하지 않음
     general_handler.setLevel(logging.INFO)
     general_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d | %(message)s',
@@ -200,16 +201,16 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     root_logger.addHandler(general_handler)
 
     # =========================================================================
-    # 3. Error Log File (error.log) - ERROR 레벨만 (일자별 로테이션)
+    # 3. Error Log File (error.log) - ERROR 레벨만 (크기 기반 로테이션)
     # =========================================================================
-    error_handler = logging.handlers.TimedRotatingFileHandler(
+    error_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "error.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    error_handler.suffix = "%Y%m%d"
+    # error_handler.suffix = "%Y%m%d"
     error_handler.setLevel(logging.ERROR)
     error_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(funcName)s:%(lineno)d\n%(message)s\n',
@@ -219,17 +220,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     root_logger.addHandler(error_handler)
 
     # =========================================================================
-    # 4. Communication Log (communication.log) - PLC 통신 전용 (일자별 로테이션)
+    # 4. Communication Log (communication.log) - PLC 통신 전용 (크기 기반 로테이션)
     # =========================================================================
     comm_logger = logging.getLogger('pymcprotocol')
-    comm_handler = logging.handlers.TimedRotatingFileHandler(
+    comm_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "communication.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    comm_handler.suffix = "%Y%m%d"
+    # comm_handler.suffix = "%Y%m%d"
     comm_handler.setLevel(logging.DEBUG)
     comm_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | PLC=%(message)s',
@@ -241,17 +242,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     comm_logger.propagate = False  # 상위 로거로 전파하지 않음
 
     # =========================================================================
-    # 5. Performance Log (performance.log) - 폴링 성능 메트릭 (일자별 로테이션)
+    # 5. Performance Log (performance.log) - 폴링 성능 메트릭 (크기 기반 로테이션)
     # =========================================================================
     perf_logger = logging.getLogger('polling.performance')
-    perf_handler = logging.handlers.TimedRotatingFileHandler(
+    perf_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "performance.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    perf_handler.suffix = "%Y%m%d"
+    # perf_handler.suffix = "%Y%m%d"
     perf_handler.setLevel(logging.INFO)
     perf_formatter = logging.Formatter(
         fmt='%(asctime)s | %(message)s',
@@ -263,17 +264,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     perf_logger.propagate = False
 
     # =========================================================================
-    # 6. PLC Log (plc.log) - PLC 관련 로그 (일자별 로테이션)
+    # 6. PLC Log (plc.log) - PLC 관련 로그 (크기 기반 로테이션)
     # =========================================================================
     plc_logger = logging.getLogger('plc')
-    plc_handler = logging.handlers.TimedRotatingFileHandler(
+    plc_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "plc.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    plc_handler.suffix = "%Y%m%d"
+    # plc_handler.suffix = "%Y%m%d"
     plc_handler.setLevel(logging.INFO)
     plc_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
@@ -285,17 +286,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     plc_logger.propagate = False
 
     # =========================================================================
-    # 7. Polling Log (polling.log) - 폴링 엔진 로그 (일자별 로테이션)
+    # 7. Polling Log (polling.log) - 폴링 엔진 로그 (크기 기반 로테이션)
     # =========================================================================
     polling_logger = logging.getLogger('polling')
-    polling_handler = logging.handlers.TimedRotatingFileHandler(
+    polling_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "polling.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    polling_handler.suffix = "%Y%m%d"
+    # polling_handler.suffix = "%Y%m%d"
     polling_handler.setLevel(logging.INFO)
     polling_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',
@@ -307,17 +308,17 @@ def setup_logging(log_dir: str = None, console_level: int = None, use_colors: bo
     polling_logger.propagate = False
 
     # =========================================================================
-    # 8. Oracle Writer Log (oracle_writer.log) - Oracle 연동 로그 (일자별 로테이션)
+    # 8. Oracle Writer Log (oracle_writer.log) - Oracle 연동 로그 (크기 기반 로테이션)
     # =========================================================================
     oracle_logger = logging.getLogger('oracle_writer')
-    oracle_handler = logging.handlers.TimedRotatingFileHandler(
+    oracle_handler = ConcurrentRotatingFileHandler(
         filename=log_path / "oracle_writer.log",
-        when='midnight',
-        interval=1,
+        mode='a',
+        maxBytes=settings.LOG_MAX_BYTES,
         backupCount=settings.LOG_BACKUP_COUNT,
         encoding='utf-8'
     )
-    oracle_handler.suffix = "%Y%m%d"
+    # oracle_handler.suffix = "%Y%m%d"
     oracle_handler.setLevel(logging.INFO)
     oracle_formatter = logging.Formatter(
         fmt='%(asctime)s | %(levelname)-8s | %(name)s | %(message)s',

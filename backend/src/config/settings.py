@@ -16,9 +16,9 @@ env_path = backend_dir / ".env"
 
 if env_path.exists():
     load_dotenv(env_path)
-    print(f"[Settings] Loaded configuration from: {env_path}")
+    logging.info(f"[Settings] Loaded configuration from: {env_path}")
 else:
-    print(f"[Settings] No .env file found at {env_path}, using defaults")
+    logging.warning(f"[Settings] No .env file found at {env_path}, using defaults")
 
 
 class Settings:
@@ -220,40 +220,40 @@ class Settings:
 
     def display_config(self) -> None:
         """현재 설정을 출력"""
-        print("\n" + "=" * 70)
-        print("SCADA System Configuration")
-        print("=" * 70)
-        print("\n[Logging]")
-        print(f"  LOG_LEVEL: {self.LOG_LEVEL}")
-        print(f"  LOG_COLORS: {self.LOG_COLORS}")
-        print(f"  LOG_DIR: {self.LOG_DIR}")
-        print(f"  LOG_MAX_BYTES: {self.LOG_MAX_BYTES:,} bytes")
-        print(f"  LOG_BACKUP_COUNT: {self.LOG_BACKUP_COUNT}")
+        logging.info("=" * 70)
+        logging.info("SCADA System Configuration")
+        logging.info("=" * 70)
+        logging.info("[Logging]")
+        logging.info(f"  LOG_LEVEL: {self.LOG_LEVEL}")
+        logging.info(f"  LOG_COLORS: {self.LOG_COLORS}")
+        logging.info(f"  LOG_DIR: {self.LOG_DIR}")
+        logging.info(f"  LOG_MAX_BYTES: {self.LOG_MAX_BYTES:,} bytes")
+        logging.info(f"  LOG_BACKUP_COUNT: {self.LOG_BACKUP_COUNT}")
 
-        print("\n[Server]")
-        print(f"  API_HOST: {self.API_HOST}")
-        print(f"  API_PORT: {self.API_PORT}")
-        print(f"  ENVIRONMENT: {self.ENVIRONMENT}")
+        logging.info("[Server]")
+        logging.info(f"  API_HOST: {self.API_HOST}")
+        logging.info(f"  API_PORT: {self.API_PORT}")
+        logging.info(f"  ENVIRONMENT: {self.ENVIRONMENT}")
 
-        print("\n[Database]")
-        print(f"  SQLite: {self.DATABASE_PATH}")
-        print(f"  Oracle: {self.ORACLE_USERNAME}@{self.ORACLE_HOST}:{self.ORACLE_PORT}/{self.ORACLE_SERVICE_NAME}")
+        logging.info("[Database]")
+        logging.info(f"  SQLite: {self.DATABASE_PATH}")
+        logging.info(f"  Oracle: {self.ORACLE_USERNAME}@{self.ORACLE_HOST}:{self.ORACLE_PORT}/{self.ORACLE_SERVICE_NAME}")
 
-        print("\n[PLC Communication]")
-        print(f"  CONNECTION_TIMEOUT: {self.CONNECTION_TIMEOUT}s")
-        print(f"  READ_TIMEOUT: {self.READ_TIMEOUT}s")
-        print(f"  POOL_SIZE_PER_PLC: {self.POOL_SIZE_PER_PLC}")
+        logging.info("[PLC Communication]")
+        logging.info(f"  CONNECTION_TIMEOUT: {self.CONNECTION_TIMEOUT}s")
+        logging.info(f"  READ_TIMEOUT: {self.READ_TIMEOUT}s")
+        logging.info(f"  POOL_SIZE_PER_PLC: {self.POOL_SIZE_PER_PLC}")
 
-        print("\n[Polling]")
-        print(f"  MAX_POLLING_GROUPS: {self.MAX_POLLING_GROUPS}")
-        print(f"  DATA_QUEUE_SIZE: {self.DATA_QUEUE_SIZE:,}")
+        logging.info("[Polling]")
+        logging.info(f"  MAX_POLLING_GROUPS: {self.MAX_POLLING_GROUPS}")
+        logging.info(f"  DATA_QUEUE_SIZE: {self.DATA_QUEUE_SIZE:,}")
 
-        print("\n[Buffer]")
-        print(f"  BUFFER_MAX_SIZE: {self.BUFFER_MAX_SIZE:,}")
-        print(f"  BUFFER_BATCH_SIZE: {self.BUFFER_BATCH_SIZE}")
-        print(f"  BACKUP_FILE_PATH: {self.BACKUP_FILE_PATH}")
+        logging.info("[Buffer]")
+        logging.info(f"  BUFFER_MAX_SIZE: {self.BUFFER_MAX_SIZE:,}")
+        logging.info(f"  BUFFER_BATCH_SIZE: {self.BUFFER_BATCH_SIZE}")
+        logging.info(f"  BACKUP_FILE_PATH: {self.BACKUP_FILE_PATH}")
 
-        print("=" * 70 + "\n")
+        logging.info("=" * 70)
 
 
 # Singleton instance

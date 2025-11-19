@@ -7,6 +7,7 @@ Broadcasts equipment status to connected Monitor UI clients every 1 second
 
 import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Dict, List, Set
 from fastapi import WebSocket, WebSocketDisconnect
@@ -14,6 +15,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 # Connected Monitor UI clients
 active_connections: Set[WebSocket] = set()
+
+logger = logging.getLogger(__name__)
 
 # Polling engine instance (to be set by main.py)
 _polling_engine = None
@@ -82,14 +85,14 @@ async def websocket_monitor_endpoint(websocket: WebSocket):
             except WebSocketDisconnect:
                 break
             except Exception as e:
-                print(f"Error broadcasting to client: {e}")
+                logger.error(f"Error broadcasting to client: {e}")
                 break
 
     except WebSocketDisconnect:
         pass
     finally:
         active_connections.discard(websocket)
-        print(f"Monitor client disconnected. Active connections: {len(active_connections)}")
+        logger.info(f"Monitor client disconnected. Active connections: {len(active_connections)}")
 
 
 async def get_equipment_status() -> List[Dict]:
@@ -111,7 +114,7 @@ async def get_equipment_status() -> List[Dict]:
         return get_mock_equipment_status()
 
     except Exception as e:
-        print(f"Error getting equipment status: {e}")
+        logger.error(f"Error getting equipment status: {e}")
         return get_mock_equipment_status()
 
 

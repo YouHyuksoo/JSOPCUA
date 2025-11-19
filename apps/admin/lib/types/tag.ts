@@ -1,7 +1,7 @@
 export interface Tag {
   id: number;
   plc_code: string;
-  workstage_code?: string | null;
+  plc_id?: number; // For form compatibility
   tag_address: string;
   tag_name: string;
   tag_division: string;
@@ -9,7 +9,7 @@ export interface Tag {
   data_type: string;
   unit?: string | null;
   scale: number;
-  machine_code?: string | null;
+  machine_code: string;
   polling_group_id?: number | null;
   enabled: boolean;
   created_at: string;
@@ -20,15 +20,27 @@ export interface Tag {
 
 export interface CreateTagRequest {
   plc_code: string;
-  workstage_code?: string;
+  machine_code: string;
   tag_address: string;
   tag_name: string;
   tag_division?: string;
+  tag_category?: string;
   data_type: string;
   unit?: string;
   scale?: number;
-  machine_code?: string;
   polling_group_id?: number;
+  enabled?: boolean;
+}
+
+export interface UpdateTagRequest {
+  tag_name?: string;
+  tag_division?: string;
+  tag_category?: string;
+  data_type?: string;
+  unit?: string;
+  scale?: number;
+  polling_group_id?: number;
+  log_mode?: string;
   enabled?: boolean;
 }
 

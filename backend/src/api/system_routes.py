@@ -10,8 +10,10 @@ from typing import Optional, Dict, List
 from datetime import datetime
 import os
 from pathlib import Path
+import logging
 
 router = APIRouter(prefix="/api/system", tags=["system"])
+logger = logging.getLogger(__name__)
 
 # Global engine instance (will be set by main app)
 _polling_engine = None
@@ -311,7 +313,7 @@ async def get_dashboard_data():
                 buffer_util = (buffer_size / buffer_max * 100) if buffer_max > 0 else 0.0
         except Exception as e:
             # Log error but continue with default values
-            print(f"Error getting SCADA data: {e}")
+            logger.error(f"Error getting SCADA data: {e}")
 
     return DashboardDataResponse(
         system=SystemInfo(

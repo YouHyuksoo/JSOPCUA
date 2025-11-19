@@ -34,6 +34,7 @@ export default function TagForm({ defaultValues, plcs, onSubmit, onCancel }: Tag
       category: defaultValues.tag_category || '',
       data_type: defaultValues.data_type as any,
       plc_id: defaultValues.plc_id,
+      machine_code: defaultValues.machine_code,
       description: defaultValues.tag_division,
       enabled: defaultValues.enabled,
     } : {
@@ -129,6 +130,17 @@ export default function TagForm({ defaultValues, plcs, onSubmit, onCancel }: Tag
           </SelectContent>
         </Select>
         {errors.plc_id && <p className="text-sm text-red-500 mt-1">{errors.plc_id.message}</p>}
+      </div>
+
+      <div>
+        <Label htmlFor="machine_code" className="text-gray-300">설비 코드 *</Label>
+        <Input
+          id="machine_code"
+          {...register('machine_code')}
+          className="bg-gray-800 border-gray-700 text-white"
+          placeholder="예: EQ001"
+        />
+        {errors.machine_code && <p className="text-sm text-red-500 mt-1">{errors.machine_code.message}</p>}
       </div>
 
       <div>

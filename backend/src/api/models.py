@@ -216,7 +216,7 @@ class PLCTestResult(BaseModel):
 class TagBase(BaseModel):
     """Base Tag model"""
     plc_code: str = Field(max_length=50)
-    workstage_code: str = Field(max_length=50)
+    machine_code: str = Field(max_length=200)
     tag_address: str = Field(max_length=20)
     tag_name: str = Field(max_length=200)
     tag_division: Optional[str] = Field(None, max_length=50)
@@ -224,7 +224,6 @@ class TagBase(BaseModel):
     data_type: str = Field(default='WORD', max_length=20)
     unit: Optional[str] = Field(None, max_length=20)
     scale: float = 1.0
-    machine_code: Optional[str] = Field(None, max_length=200)
     polling_group_id: Optional[int] = None
     log_mode: str = Field(default='ALWAYS', description="Log mode: ALWAYS, ON_CHANGE, NEVER")
     enabled: bool = True

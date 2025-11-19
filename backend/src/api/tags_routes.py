@@ -31,14 +31,13 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
     Create a new PLC tag
 
     - **plc_code**: PLC code (must not be empty)
-    - **workstage_code**: Workstage code (must not be empty)
+    - **machine_code**: Machine code (must not be empty)
     - **tag_address**: Tag address (max 20 chars, e.g., D100, W200)
     - **tag_name**: Tag name (max 200 chars)
     - **tag_division**: Optional division (max 50 chars)
     - **data_type**: Data type (default: WORD, max 20 chars)
     - **unit**: Optional unit (max 20 chars)
     - **scale**: Scale factor (default: 1.0)
-    - **machine_code**: Optional machine code (max 200 chars)
     - **polling_group_id**: Optional polling group ID
     - **enabled**: Enable/disable flag (default: true)
 
@@ -49,9 +48,9 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="plc_code cannot be empty")
 
-    if not tag.workstage_code or not tag.workstage_code.strip():
+    if not tag.machine_code or not tag.machine_code.strip():
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="workstage_code cannot be empty")
+        raise HTTPException(status_code=400, detail="machine_code cannot be empty")
 
     if tag.polling_group_id is not None:
         validate_polling_group_exists(db, tag.polling_group_id)
@@ -66,9 +65,9 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
         cursor.execute("""
             INSERT INTO tags (
                 plc_code, polling_group_id, tag_address, tag_name, tag_type,
-                unit, scale, machine_code, log_mode, description, is_active, workstage_code
+                unit, scale, machine_code, log_mode, description, is_active
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             tag.plc_code.strip(),
             tag.polling_group_id,
@@ -77,11 +76,10 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
             tag.data_type,  # tag_type
             tag.unit,
             tag.scale,
-            tag.machine_code,
+            tag.machine_code.strip(),
             tag.log_mode,  # log_mode
             tag.tag_division,  # description
-            is_active,  # is_active (unknown이면 False)
-            tag.workstage_code.strip()
+            is_active  # is_active (unknown이면 False)
         ))
         conn.commit()
         tag_id = cursor.lastrowid
@@ -100,7 +98,7 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
 @router.get("", response_model=PaginatedResponse[TagResponse])
 def list_tags(
     plc_code: Optional[str] = None,
-    workstage_code: Optional[str] = None,
+    machine_code: Optional[str] = None,
     polling_group_id: Optional[int] = None,
     tag_category: Optional[str] = None,
     is_active: Optional[bool] = None,
@@ -111,7 +109,7 @@ def list_tags(
     List all tags with pagination and filters
 
     - **plc_code**: Optional filter by PLC code
-    - **workstage_code**: Optional filter by workstage code
+    - **machine_code**: Optional filter by machine code
     - **polling_group_id**: Optional filter by polling group ID
     - **tag_category**: Optional filter by tag category (tag type)
     - **is_active**: Optional filter by active status (true/false)
@@ -127,9 +125,9 @@ def list_tags(
     if plc_code:
         conditions.append("t.plc_code = ?")
         params.append(plc_code)
-    if workstage_code:
-        conditions.append("t.workstage_code = ?")
-        params.append(workstage_code)
+    if machine_code:
+        conditions.append("t.machine_code = ?")
+        params.append(machine_code)
     if polling_group_id:
         conditions.append("t.polling_group_id = ?")
         params.append(polling_group_id)
@@ -235,7 +233,7 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
     This endpoint:
     1. Fetches all active tags (TAG_USE_YN='Y') from Oracle ICOM_PLC_TAG_MASTER
     2. For each Oracle tag:
-       - Uses plc_code, workstage_code, machine_code directly from Oracle
+       - Uses plc_code, machine_code directly from Oracle
        - If tag exists (by plc_code + tag_address): UPDATE
        - If tag doesn't exist: INSERT
     3. Returns sync statistics
@@ -274,7 +272,6 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
 
             for oracle_tag in oracle_tags:
                 plc_code = oracle_tag['plc_code']
-                workstage_code = oracle_tag.get('workstage_code')
                 machine_code = oracle_tag.get('machine_code')
                 tag_address = oracle_tag['tag_address']
                 tag_name = oracle_tag['tag_name'] or 'UNKNOWN'  # NULL 값을 'UNKNOWN'으로 대체
@@ -294,9 +291,9 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                         logger.warning(error_msg)
                         continue
 
-                    if not workstage_code or not workstage_code.strip():
+                    if not machine_code or not machine_code.strip():
                         error_count += 1
-                        error_msg = f"Missing workstage_code for tag {tag_address}"
+                        error_msg = f"Missing machine_code for tag {tag_address}"
                         error_details.append(error_msg)
                         logger.warning(error_msg)
                         continue
@@ -323,12 +320,11 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                                 min_value = ?,
                                 max_value = ?,
                                 machine_code = ?,
-                                workstage_code = ?,
                                 is_active = ?,
                                 updated_at = CURRENT_TIMESTAMP
                             WHERE plc_code = ? AND tag_address = ?
                         """, (tag_name, tag_category, tag_type, unit, scale, min_value, max_value,
-                              machine_code, workstage_code, is_active, plc_code, tag_address))
+                              machine_code, is_active, plc_code, tag_address))
                         updated_count += 1
                         logger.debug(f"Updated tag: {plc_code}/{tag_address}")
 
@@ -336,10 +332,10 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
                         # INSERT new tag
                         cursor.execute("""
                             INSERT INTO tags
-                            (plc_code, workstage_code, tag_address, tag_name, tag_category, tag_type,
+                            (plc_code, tag_address, tag_name, tag_category, tag_type,
                              unit, scale, min_value, max_value, machine_code, is_active)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (plc_code, workstage_code, tag_address, tag_name, tag_category, tag_type,
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (plc_code, tag_address, tag_name, tag_category, tag_type,
                               unit, scale, min_value, max_value, machine_code, is_active))
                         created_count += 1
                         logger.debug(f"Created tag: {plc_code}/{tag_address}")
@@ -573,14 +569,13 @@ async def import_tags_csv(
 
     CSV format (columns):
     - PLC_CODE: PLC code (required)
-    - WORKSTAGE_CODE: Workstage code (required)
+    - MACHINE_CODE: Machine code (required, max 200 chars)
     - TAG_ADDRESS: Tag address (required, max 20 chars)
     - TAG_NAME: Tag name (required, max 200 chars)
     - TAG_DIVISION: Division (optional, max 50 chars)
     - DATA_TYPE: Data type (optional, default: WORD)
     - UNIT: Unit (optional, max 20 chars)
     - SCALE: Scale factor (optional, default: 1.0)
-    - MACHINE_CODE: Machine code (optional, max 200 chars)
     - ENABLED: Enabled flag (optional, default: 1)
 
     Performance:
@@ -599,7 +594,7 @@ async def import_tags_csv(
         df = pd.read_csv(io.BytesIO(contents))
 
         # Validate required columns
-        required_cols = ['PLC_CODE', 'WORKSTAGE_CODE', 'TAG_ADDRESS', 'TAG_NAME']
+        required_cols = ['PLC_CODE', 'MACHINE_CODE', 'TAG_ADDRESS', 'TAG_NAME']
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             return TagImportResult(
@@ -625,7 +620,7 @@ async def import_tags_csv(
                 try:
                     # Get codes directly
                     plc_code = str(row['PLC_CODE']).strip()
-                    workstage_code = str(row['WORKSTAGE_CODE']).strip()
+                    machine_code = str(row['MACHINE_CODE']).strip()
 
                     # Validate codes are not empty
                     if not plc_code:
@@ -633,8 +628,8 @@ async def import_tags_csv(
                         failure_count += 1
                         continue
 
-                    if not workstage_code:
-                        errors.append({"row": row_num, "error": "WORKSTAGE_CODE cannot be empty"})
+                    if not machine_code:
+                        errors.append({"row": row_num, "error": "MACHINE_CODE cannot be empty"})
                         failure_count += 1
                         continue
 
@@ -645,7 +640,6 @@ async def import_tags_csv(
                     data_type = str(row.get('DATA_TYPE', 'WORD')).strip()
                     unit = str(row.get('UNIT', '')).strip() or None
                     scale = float(row.get('SCALE', 1.0))
-                    machine_code = str(row.get('MACHINE_CODE', '')).strip() or None
                     enabled = int(row.get('ENABLED', 1))
 
                     # 태그명이 "unknown"이면 is_active=0으로 설정
@@ -654,7 +648,7 @@ async def import_tags_csv(
 
                     batch_data.append((
                         plc_code, None, tag_address, tag_name, data_type,
-                        unit, scale, machine_code, tag_division, enabled, workstage_code
+                        unit, scale, machine_code, tag_division, enabled
                     ))
 
                 except Exception as e:
@@ -669,9 +663,9 @@ async def import_tags_csv(
                         cursor.executemany("""
                             INSERT INTO tags (
                                 plc_code, polling_group_id, tag_address, tag_name, tag_type,
-                                unit, scale, machine_code, description, is_active, workstage_code
+                                unit, scale, machine_code, description, is_active
                             )
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """, batch_data)
                         conn.commit()
                         success_count += len(batch_data)
@@ -686,9 +680,9 @@ async def import_tags_csv(
                                 cursor.execute("""
                                     INSERT INTO tags (
                                         plc_code, polling_group_id, tag_address, tag_name, tag_type,
-                                        unit, scale, machine_code, description, is_active, workstage_code
+                                        unit, scale, machine_code, description, is_active
                                     )
-                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                 """, data)
                                 conn.commit()
                                 success_count += 1
@@ -719,15 +713,15 @@ async def import_tags_csv(
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse"""
-    # Row format with new schema (plc_code, workstage_code):
-    # (0:id, 1:plc_code, 2:workstage_code, 3:tag_address, 4:tag_name, 5:tag_type, 6:unit,
+    # Row format (plc_code, machine_code):
+    # (0:id, 1:plc_code, 2:machine_code, 3:tag_address, 4:tag_name, 5:tag_type, 6:unit,
     #  7:scale, 8:offset, 9:min_value, 10:max_value, 11:polling_group_id, 12:description,
     #  13:is_active, 14:last_value, 15:last_updated_at, 16:created_at, 17:updated_at,
-    #  18:tag_category, 19:log_mode, 20:machine_code)
+    #  18:tag_category, 19:log_mode)
     return TagResponse(
         id=row[0],
         plc_code=row[1] if row[1] else '',
-        workstage_code=row[2] if row[2] else '',
+        machine_code=row[2] if row[2] else '',
         tag_address=row[3],
         tag_name=row[4],
         tag_division=row[12] if row[12] else '',  # description
@@ -735,7 +729,6 @@ def _row_to_tag_response(row) -> TagResponse:
         data_type=row[5],  # tag_type
         unit=str(row[6]) if row[6] else None,
         scale=float(row[7]) if row[7] is not None else 1.0,
-        machine_code=row[20] if len(row) > 20 and row[20] else None,  # machine_code
         polling_group_id=row[11],
         enabled=bool(row[13]),  # is_active
         created_at=row[16] if row[16] else datetime.now().isoformat(),

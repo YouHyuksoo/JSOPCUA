@@ -6,6 +6,7 @@
 
 # PLC Communication
 pymcprotocol>=0.3.0
+concurrent-log-handler>=0.9.24
 
 # Testing
 pytest>=7.4.0

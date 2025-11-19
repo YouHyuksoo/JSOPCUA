@@ -4,6 +4,7 @@ FastAPI Application
 Main FastAPI application for polling engine REST API.
 """
 
+import logging
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
@@ -27,6 +28,7 @@ from .monitor_routes import router as monitor_router
 
 # Initialize logging on module import
 initialize_logging()
+logger = logging.getLogger(__name__)
 
 # Global instances
 pool_manager: PoolManager = None
@@ -45,9 +47,9 @@ async def lifespan(app: FastAPI):
     global pool_manager, polling_engine, polling_group_manager
 
     # Startup
-    print("Starting SCADA API Server...")
-    print("⚠️  Polling groups are NOT started automatically")
-    print("   Use /api/polling-groups/{id}/start to start polling groups")
+    logger.info("Starting SCADA API Server...")
+    logger.info("⚠️  Polling groups are NOT started automatically")
+    logger.info("   Use /api/polling-groups/{id}/start to start polling groups")
 
     # Use absolute path for database
     import os
@@ -62,12 +64,12 @@ async def lifespan(app: FastAPI):
     # Initialize PoolManager
     pool_manager = PoolManager(db_path)
     pool_manager.initialize()
-    print(f"✅ PoolManager initialized: {pool_manager.get_plc_count()} PLC(s)")
+    logger.info(f"✅ PoolManager initialized: {pool_manager.get_plc_count()} PLC(s)")
 
     # Initialize PollingGroupManager (singleton)
     polling_group_manager = PollingGroupManager(db_path, pool_manager)
     polling_group_manager.initialize()
-    print("✅ PollingGroupManager initialized")
+    logger.info("✅ PollingGroupManager initialized")
 
     # Also keep legacy polling_engine reference for backwards compatibility
     polling_engine = polling_group_manager.polling_engine
@@ -78,17 +80,17 @@ async def lifespan(app: FastAPI):
     set_monitor_engine(polling_engine)
     set_system_engine(polling_engine)
 
-    print("✅ SCADA API Server ready (polling groups stopped)")
+    logger.info("✅ SCADA API Server ready (polling groups stopped)")
 
     yield
 
     # Shutdown
-    print("Shutting down SCADA API Server...")
+    logger.info("Shutting down SCADA API Server...")
     if polling_group_manager:
         polling_group_manager.shutdown()
     if pool_manager:
         pool_manager.shutdown()
-    print("Shutdown complete")
+    logger.info("Shutdown complete")
 
 
 # Create FastAPI app

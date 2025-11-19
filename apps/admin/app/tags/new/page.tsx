@@ -29,8 +29,8 @@ export default function NewTagPage() {
     try {
       // Convert form data to API request format
       await createTag({
-        plc_id: data.plc_id,
-        process_id: 0,
+        plc_code: data.plc_id.toString(),
+        machine_code: data.machine_code,
         tag_address: data.address,
         tag_name: data.name,
         tag_division: data.description || '',

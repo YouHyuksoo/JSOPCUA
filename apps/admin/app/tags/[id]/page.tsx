@@ -41,16 +41,16 @@ export default function EditTagPage({ params }: { params: { id: string } }) {
   }, [id]);
 
   const handleSubmit = async (data: TagFormData) => {
+    if (!tag) return;
+
     try {
       // Convert form data to API request format
       await updateTag(id, {
-        plc_id: data.plc_id,
-        process_id: tag?.process_id ?? 0,
-        tag_address: data.address,
         tag_name: data.name,
         tag_division: data.description || '',
+        tag_category: data.category || '',
         data_type: data.data_type,
-        enabled: tag?.enabled ?? true,
+        enabled: data.enabled,
       });
       toast.success('태그가 수정되었습니다');
       router.push('/tags');

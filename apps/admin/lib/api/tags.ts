@@ -1,5 +1,5 @@
 import apiClient from './client';
-import { Tag, CreateTagRequest, CSVUploadResponse } from '@/lib/types/tag';
+import { Tag, CreateTagRequest, UpdateTagRequest, CSVUploadResponse } from '@/lib/types/tag';
 import { PaginatedResponse } from '@/lib/types/common';
 
 export const getTags = async (page = 1, limit = 20, tag_category?: string, is_active?: boolean) => {
@@ -29,7 +29,7 @@ export const createTag = async (data: CreateTagRequest) => {
   return response.data;
 };
 
-export const updateTag = async (id: number, data: CreateTagRequest) => {
+export const updateTag = async (id: number, data: UpdateTagRequest) => {
   const response = await apiClient.put<Tag>(`/tags/${id}`, data);
   return response.data;
 };
