@@ -340,11 +340,12 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                 ) : (
                   <>
                     {/* 테이블 헤더 */}
-                    <div className="grid grid-cols-12 gap-3 px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm font-medium text-gray-400">
+                    <div className="grid grid-cols-12 gap-2 px-4 py-3 bg-gray-800 border-b border-gray-700 text-sm font-medium text-gray-400">
                       <div className="col-span-1"></div>
-                      <div className="col-span-4">태그명</div>
+                      <div className="col-span-3">태그명</div>
                       <div className="col-span-2">주소</div>
-                      <div className="col-span-2">데이터 타입</div>
+                      <div className="col-span-2">설비 코드</div>
+                      <div className="col-span-1">타입</div>
                       <div className="col-span-2">PLC</div>
                       <div className="col-span-1">그룹</div>
                     </div>
@@ -354,7 +355,7 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                       {paginatedTags.map((tag) => (
                         <div
                           key={tag.id}
-                          className={`grid grid-cols-12 gap-3 px-4 py-3 hover:bg-gray-750 transition-colors ${
+                          className={`grid grid-cols-12 gap-2 px-4 py-3 hover:bg-gray-750 transition-colors ${
                             selectedTags.includes(tag.id) ? 'bg-gray-750' : ''
                           }`}
                         >
@@ -367,10 +368,10 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                           </div>
                           <label
                             htmlFor={`tag-${tag.id}`}
-                            className="col-span-11 grid grid-cols-11 gap-3 cursor-pointer items-center"
+                            className="col-span-11 grid grid-cols-11 gap-2 cursor-pointer items-center"
                           >
-                            <div className="col-span-4">
-                              <span className="font-medium text-white">{tag.tag_name}</span>
+                            <div className="col-span-3">
+                              <span className="font-medium text-white text-sm truncate block">{tag.tag_name}</span>
                             </div>
                             <div className="col-span-2">
                               <Badge variant="outline" className="text-xs border-gray-600 text-gray-300">
@@ -378,13 +379,16 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                               </Badge>
                             </div>
                             <div className="col-span-2">
-                              <span className="text-sm text-gray-300">{tag.data_type}</span>
-                            </div>
-                            <div className="col-span-2">
-                              <span className="text-sm text-gray-300">{tag.plc_code || '-'}</span>
+                              <span className="text-sm text-gray-300 truncate block">{tag.machine_code || '-'}</span>
                             </div>
                             <div className="col-span-1">
-                              <span className="text-sm text-gray-400 truncate" title={tag.tag_division || '-'}>
+                              <span className="text-xs text-gray-300">{tag.data_type}</span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-sm text-gray-300 truncate block">{tag.plc_code || '-'}</span>
+                            </div>
+                            <div className="col-span-1">
+                              <span className="text-xs text-gray-400 truncate block" title={tag.tag_division || '-'}>
                                 {tag.tag_division || '-'}
                               </span>
                             </div>

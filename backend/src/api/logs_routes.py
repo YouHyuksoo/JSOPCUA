@@ -4,6 +4,7 @@ Log Query Routes
 REST API endpoints for querying log files:
 - GET /api/logs/{log_type} - Query logs with filters
 - GET /api/logs/{log_type}/download - Download logs as file
+- DELETE /api/logs/{log_type} - Delete all logs for a specific log type
 """
 
 from fastapi import APIRouter, Query, HTTPException
@@ -300,3 +301,39 @@ async def download_logs(
         filename=f"{log_type}_filtered_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",
         media_type="text/plain"
     )
+
+
+@router.delete("/{log_type}")
+async def delete_logs(log_type: LogType):
+    """
+    로그 파일 삭제 API
+
+    Args:
+        log_type: 로그 타입 (scada, error, communication, performance, plc, polling, oracle_writer)
+
+    Returns:
+        dict: 삭제 성공 메시지
+    """
+    log_file = get_log_file_path(log_type)
+
+    if not log_file:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Log type not found: {log_type}"
+        )
+
+    try:
+        # 파일이 존재하면 내용을 지우고, 존재하지 않으면 새로 생성
+        with open(log_file, 'w', encoding='utf-8') as f:
+            f.write('')  # 빈 파일로 만들기
+
+        return {
+            "success": True,
+            "message": f"{log_type}.log 파일이 성공적으로 삭제되었습니다.",
+            "log_type": log_type
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to delete log file: {str(e)}"
+        )

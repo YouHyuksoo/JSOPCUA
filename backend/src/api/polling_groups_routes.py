@@ -300,6 +300,149 @@ def update_polling_group(
 
 
 # ==============================================================================
+# GET /api/polling-groups/{id}/pre-start-check - Check before starting
+# ==============================================================================
+
+@router.get("/{group_id}/pre-start-check")
+def pre_start_check(group_id: int, db: SQLiteManager = Depends(get_db)):
+    """
+    Pre-start validation check for polling group
+
+    Validates:
+    - Group exists and has tags
+    - PLC connection is available
+    - Tag count information
+
+    Returns check results with detailed information
+    """
+    from src.polling.polling_group_manager import PollingGroupManager
+
+    # Check group exists
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT id, group_name, plc_code, polling_interval_ms
+            FROM polling_groups
+            WHERE id = ?
+        """, (group_id,))
+        group = cursor.fetchone()
+        if not group:
+            raise_not_found("Polling Group", group_id)
+
+        group_name = group[1]
+        plc_code = group[2]
+        interval_ms = group[3]
+
+        # Get tag count
+        cursor.execute("""
+            SELECT COUNT(*)
+            FROM tags
+            WHERE polling_group_id = ? AND is_active = 1
+        """, (group_id,))
+        tag_count = cursor.fetchone()[0]
+
+        # Get PLC info
+        cursor.execute("""
+            SELECT plc_name, ip_address, port, is_active
+            FROM plc_connections
+            WHERE plc_code = ?
+        """, (plc_code,))
+        plc_info = cursor.fetchone()
+
+    # Check if no tags
+    if tag_count == 0:
+        return {
+            "can_start": False,
+            "reason": "NO_TAGS",
+            "message": f"폴링 그룹 '{group_name}'에 활성 태그가 없습니다.",
+            "group_name": group_name,
+            "plc_code": plc_code,
+            "tag_count": 0,
+            "plc_status": "unknown"
+        }
+
+    # Check PLC exists and active
+    if not plc_info or not plc_info[3]:
+        return {
+            "can_start": False,
+            "reason": "PLC_INACTIVE",
+            "message": f"PLC '{plc_code}'가 비활성 상태이거나 존재하지 않습니다.",
+            "group_name": group_name,
+            "plc_code": plc_code,
+            "tag_count": tag_count,
+            "plc_status": "inactive"
+        }
+
+    plc_name = plc_info[0]
+    ip_address = plc_info[1]
+    port = plc_info[2]
+
+    # Test PLC connection
+    manager = PollingGroupManager.get_instance()
+    if manager is None:
+        return {
+            "can_start": False,
+            "reason": "ENGINE_NOT_READY",
+            "message": "폴링 엔진이 초기화되지 않았습니다.",
+            "group_name": group_name,
+            "plc_code": plc_code,
+            "tag_count": tag_count,
+            "plc_status": "unknown"
+        }
+
+    # Test actual PLC connection
+    plc_connected = False
+    connection_error = None
+
+    try:
+        pool_manager = manager.pool_manager
+        # Try to get a connection (will create if needed)
+        pool = pool_manager._get_pool(plc_code)
+        test_conn = pool.get_connection(timeout=5)
+
+        # Connection successful
+        plc_connected = True
+
+        # Return connection immediately
+        pool.return_connection(test_conn)
+
+    except Exception as e:
+        connection_error = str(e)
+        logger.warning(f"PLC connection test failed for {plc_code} ({ip_address}:{port}): {e}")
+
+    # Return result
+    if plc_connected:
+        return {
+            "can_start": True,
+            "reason": "OK",
+            "message": f"폴링 시작 준비 완료",
+            "group_name": group_name,
+            "plc_code": plc_code,
+            "plc_name": plc_name,
+            "plc_ip": ip_address,
+            "plc_port": port,
+            "tag_count": tag_count,
+            "interval_ms": interval_ms,
+            "plc_status": "connected"
+        }
+    else:
+        return {
+            "can_start": False,
+            "reason": "PLC_CONNECTION_FAILED",
+            "message": f"PLC '{plc_code}' ({ip_address}:{port}) 연결 실패: {connection_error}",
+            "group_name": group_name,
+            "plc_code": plc_code,
+            "plc_name": plc_name,
+            "plc_ip": ip_address,
+            "plc_port": port,
+            "tag_count": tag_count,
+            "interval_ms": interval_ms,
+            "plc_status": "connection_failed",
+            "error_detail": connection_error
+        }
+
+
+# ==============================================================================
 # POST /api/polling-groups/{id}/start - Start polling group
 # ==============================================================================
 
@@ -535,19 +678,23 @@ def _row_to_polling_group_response(row) -> PollingGroupResponse:
 
 def _row_to_tag_response(row) -> TagResponse:
     """Convert database row to TagResponse (for /tags endpoint)"""
-    # Row format: (id, plc_code, polling_group_id, tag_address, tag_name, tag_type, unit, scale, offset, min_value, max_value, machine_code, description, is_active, last_value, last_updated_at, created_at, updated_at)
+    # Row format from PRAGMA table_info:
+    # 0:id, 1:plc_code, 2:workstage_code, 3:tag_address, 4:tag_name, 5:tag_type,
+    # 6:unit, 7:scale, 8:offset, 9:min_value, 10:max_value, 11:polling_group_id,
+    # 12:description, 13:is_active, 14:last_value, 15:last_updated_at, 16:created_at,
+    # 17:updated_at, 18:tag_category, 19:log_mode, 20:machine_code
     from datetime import datetime
     return TagResponse(
         id=row[0],
         plc_code=row[1],
         tag_address=row[3],
         tag_name=row[4],
-        tag_division=row[12] if row[12] else '',  # description
+        tag_division=row[18] if len(row) > 18 and row[18] else '',  # tag_category
         data_type=row[5],  # tag_type
-        unit=str(row[6]) if row[6] else None,  # Convert to string if not None
+        unit=str(row[6]) if row[6] else None,
         scale=float(row[7]) if row[7] is not None else 1.0,
-        machine_code=str(row[11]) if row[11] is not None else None,  # Convert to string
-        polling_group_id=row[2],
+        machine_code=str(row[20]) if len(row) > 20 and row[20] is not None else None,
+        polling_group_id=row[11],  # polling_group_id is at index 11
         enabled=bool(row[13]),  # is_active
         created_at=row[16] if row[16] else datetime.now().isoformat(),
         updated_at=row[17] if row[17] else datetime.now().isoformat()

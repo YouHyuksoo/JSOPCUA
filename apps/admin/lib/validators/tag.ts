@@ -8,7 +8,7 @@ export const tagSchema = z.object({
   plc_id: z.number().int().positive('PLC를 선택해주세요'),
   machine_code: z.string().min(1, '설비 코드는 필수입니다').max(200, '설비 코드는 200자 이하여야 합니다'),
   description: z.string().max(255, '설명은 255자 이하여야 합니다').optional(),
-  enabled: z.boolean().default(true),
+  enabled: z.boolean(),
 });
 
 export type TagFormData = z.infer<typeof tagSchema>;

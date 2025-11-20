@@ -29,7 +29,7 @@ import { toast } from 'sonner';
 import { Plus, Search, Edit, Trash2, Loader2, Factory, RefreshCw, Filter } from 'lucide-react';
 
 export default function WorkstagesPage() {
-  const [processes, setProcesses] = useState<Workstage[]>([]);
+  const [workstages, setWorkstages] = useState<Workstage[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -41,11 +41,11 @@ export default function WorkstagesPage() {
   const [totalItems, setTotalItems] = useState(0);
   const itemsPerPage = 20;
 
-  const fetchProcesses = async (page = 1) => {
+  const fetchWorkstages = async (page = 1) => {
     setLoading(true);
     try {
       const data = await getWorkstages(page, itemsPerPage);
-      setProcesses(data.items);
+      setWorkstages(data.items);
       setTotalPages(data.total_pages);
       setTotalItems(data.total_count);
       setCurrentPage(data.current_page);
@@ -57,7 +57,7 @@ export default function WorkstagesPage() {
   };
 
   useEffect(() => {
-    fetchProcesses(currentPage);
+    fetchWorkstages(currentPage);
   }, [currentPage]);
 
   const handleDelete = async () => {
@@ -66,7 +66,7 @@ export default function WorkstagesPage() {
       await deleteWorkstage(deleteId);
       toast.success('공정이 삭제되었습니다');
       setDeleteId(null);
-      fetchProcesses(currentPage);
+      fetchWorkstages(currentPage);
     } catch (error) {
       toast.error('공정 삭제 실패');
     }
@@ -80,7 +80,7 @@ export default function WorkstagesPage() {
       if (result.success) {
         toast.success(
           `Oracle 동기화 완료\n` +
-          `총 ${result.total_oracle_processes}개 중 ` +
+          `총 ${result.total_oracle_workstages}개 중 ` +
           `${result.created}개 생성, ${result.updated}개 업데이트`,
           { duration: 5000 }
         );
@@ -92,9 +92,9 @@ export default function WorkstagesPage() {
           );
         }
 
-        // Refresh process list and go to first page
+        // Refresh workstage list and go to first page
         setCurrentPage(1);
-        fetchProcesses(1);
+        fetchWorkstages(1);
 
         // Close dialog
         setSyncDialogOpen(false);
@@ -109,26 +109,26 @@ export default function WorkstagesPage() {
     }
   };
 
-  // Filter processes based on search term and status (client-side filtering for current page)
-  const filteredProcesses = processes.filter((process) => {
+  // Filter workstages based on search term and status (client-side filtering for current page)
+  const filteredWorkstages = workstages.filter((workstage) => {
     // Status filter
-    if (statusFilter === 'active' && !process.enabled) return false;
-    if (statusFilter === 'inactive' && process.enabled) return false;
+    if (statusFilter === 'active' && !workstage.enabled) return false;
+    if (statusFilter === 'inactive' && workstage.enabled) return false;
 
     // Search filter
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
       return (
-        (process.process_name?.toLowerCase() || '').includes(searchLower) ||
-        (process.process_code?.toLowerCase() || '').includes(searchLower) ||
-        (process.equipment_type?.toLowerCase() || '').includes(searchLower)
+        (workstage.workstage_name?.toLowerCase() || '').includes(searchLower) ||
+        (workstage.workstage_code?.toLowerCase() || '').includes(searchLower) ||
+        (workstage.equipment_type?.toLowerCase() || '').includes(searchLower)
       );
     }
 
     return true;
   });
 
-  if (loading && processes.length === 0) {
+  if (loading && workstages.length === 0) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -150,10 +150,11 @@ export default function WorkstagesPage() {
           <Button
             onClick={() => setSyncDialogOpen(true)}
             disabled={syncing}
-            className="bg-green-600 hover:bg-green-700"
+            variant="outline"
+            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Oracle 동기화
+            Oracle에서 동기화
           </Button>
           <Link href="/workstages/new">
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -218,34 +219,34 @@ export default function WorkstagesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProcesses.length === 0 ? (
+                {filteredWorkstages.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={8} className="text-center text-gray-500 py-8">
                       공정이 없습니다
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProcesses.map((process) => (
+                  filteredWorkstages.map((workstage) => (
                     <TableRow
-                      key={process.id}
+                      key={workstage.id}
                       className="border-gray-800 hover:bg-gray-800/50"
                     >
-                      <TableCell className="font-medium text-white">{process.id}</TableCell>
-                      <TableCell className="text-white font-semibold">{process.process_name}</TableCell>
+                      <TableCell className="font-medium text-white">{workstage.id}</TableCell>
+                      <TableCell className="text-white font-semibold">{workstage.workstage_name}</TableCell>
                       <TableCell className="text-gray-300">
                         <span className="px-2 py-1 bg-purple-500/10 text-purple-400 rounded text-xs font-mono">
-                          {process.process_code}
+                          {workstage.workstage_code}
                         </span>
                       </TableCell>
                       <TableCell className="text-gray-300">
                         <span className="px-2 py-1 bg-blue-500/10 text-blue-400 rounded text-xs font-mono">
-                          {process.machine_code || '-'}
+                          {workstage.machine_code || '-'}
                         </span>
                       </TableCell>
-                      <TableCell className="text-gray-400">{process.equipment_type || '-'}</TableCell>
-                      <TableCell className="text-gray-400">{process.process_sequence}</TableCell>
+                      <TableCell className="text-gray-400">{workstage.equipment_type || '-'}</TableCell>
+                      <TableCell className="text-gray-400">{workstage.workstage_sequence}</TableCell>
                       <TableCell>
-                        {process.enabled ? (
+                        {workstage.enabled ? (
                           <span className="px-2 py-1 bg-green-500/10 text-green-400 rounded text-xs">
                             활성
                           </span>
@@ -256,7 +257,7 @@ export default function WorkstagesPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Link href={`/workstages/${process.id}`}>
+                        <Link href={`/workstages/${workstage.id}`}>
                           <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">
                             <Edit className="h-4 w-4" />
                           </Button>
@@ -264,7 +265,7 @@ export default function WorkstagesPage() {
                         <Button
                           size="sm"
                           variant="destructive"
-                          onClick={() => setDeleteId(process.id)}
+                          onClick={() => setDeleteId(workstage.id)}
                           className="bg-red-500/10 text-red-500 hover:bg-red-500/20"
                         >
                           <Trash2 className="h-4 w-4" />

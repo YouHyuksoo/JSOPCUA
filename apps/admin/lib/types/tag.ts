@@ -9,7 +9,7 @@ export interface Tag {
   data_type: string;
   unit?: string | null;
   scale: number;
-  machine_code: string;
+  machine_code?: string | null;
   polling_group_id?: number | null;
   enabled: boolean;
   created_at: string;

@@ -216,7 +216,7 @@ class PLCTestResult(BaseModel):
 class TagBase(BaseModel):
     """Base Tag model"""
     plc_code: str = Field(max_length=50)
-    machine_code: str = Field(max_length=200)
+    machine_code: Optional[str] = Field(None, max_length=200)
     tag_address: str = Field(max_length=20)
     tag_name: str = Field(max_length=200)
     tag_division: Optional[str] = Field(None, max_length=50)

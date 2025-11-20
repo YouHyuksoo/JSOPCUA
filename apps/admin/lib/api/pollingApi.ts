@@ -15,7 +15,11 @@ export interface GroupStatus {
   total_polls: number;
   success_count: number;
   error_count: number;
+  success_rate: number;
   avg_poll_time_ms: number;
+  consecutive_failures: number;
+  last_error: string | null;
+  next_retry_in: number | null;
 }
 
 export interface QueueStatus {
@@ -36,6 +40,21 @@ export interface TriggerResponse {
   mode: string;
   message: string;
   tag_count?: number;
+}
+
+export interface PreStartCheckResponse {
+  can_start: boolean;
+  reason: string;
+  message: string;
+  group_name: string;
+  plc_code: string;
+  plc_name?: string;
+  plc_ip?: string;
+  plc_port?: number;
+  tag_count: number;
+  interval_ms?: number;
+  plc_status: 'connected' | 'connection_failed' | 'inactive' | 'unknown';
+  error_detail?: string;
 }
 
 class PollingApi {
@@ -63,6 +82,18 @@ class PollingApi {
     const response = await fetch(`${this.baseUrl}/api/polling/groups/${groupName}/status`);
     if (!response.ok) {
       throw new Error(`Failed to get group status: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
+  /**
+   * Pre-start check for polling group
+   */
+  async preStartCheck(groupId: number): Promise<PreStartCheckResponse> {
+    const response = await fetch(`${this.baseUrl}/api/polling-groups/${groupId}/pre-start-check`);
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.detail || `Failed to check group: ${response.statusText}`);
     }
     return response.json();
   }

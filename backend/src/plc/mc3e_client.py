@@ -55,7 +55,7 @@ class MC3EClient:
             PLCTimeoutError: 연결 타임아웃 시
         """
         try:
-            logger.info(f"Connecting to PLC: {self.plc_code} ({self.ip_address}:{self.port})")
+            logger.info(f"🔌 [{self.plc_code}] Connecting to {self.ip_address}:{self.port} (timeout={self.timeout}s)...")
 
             self._plc = Type3E()
             # pymcprotocol의 connect() 메서드에 timeout 파라미터 전달
@@ -68,17 +68,31 @@ class MC3EClient:
 
             self._is_connected = True
 
-            logger.info(f"PLC connected successfully: {self.plc_code}")
+            logger.info(f"✅ [{self.plc_code}] Connected successfully to {self.ip_address}:{self.port}")
             return True
 
         except Exception as e:
             self._is_connected = False
-            error_msg = f"Failed to connect to PLC: {str(e)}"
-            logger.error(f"[{self.plc_code}] {error_msg}")
+            error_type = type(e).__name__
+            error_detail = str(e)
 
-            if "timeout" in str(e).lower():
+            # 더 자세한 오류 메시지
+            if "timeout" in error_detail.lower():
+                error_msg = f"Connection timeout to {self.ip_address}:{self.port} after {self.timeout}s"
+                logger.error(f"⏱️  [{self.plc_code}] TIMEOUT - {error_msg} (Error: {error_type}: {error_detail})")
                 raise PLCTimeoutError(error_msg, self.plc_code) from e
-            raise PLCConnectionError(error_msg, self.plc_code) from e
+            elif "refused" in error_detail.lower():
+                error_msg = f"Connection refused by {self.ip_address}:{self.port} (PLC may be offline or port closed)"
+                logger.error(f"❌ [{self.plc_code}] CONNECTION REFUSED - {error_msg} (Error: {error_type}: {error_detail})")
+                raise PLCConnectionError(error_msg, self.plc_code) from e
+            elif "unreachable" in error_detail.lower():
+                error_msg = f"Network unreachable to {self.ip_address}:{self.port} (Check network/firewall)"
+                logger.error(f"🚫 [{self.plc_code}] UNREACHABLE - {error_msg} (Error: {error_type}: {error_detail})")
+                raise PLCConnectionError(error_msg, self.plc_code) from e
+            else:
+                error_msg = f"Failed to connect to {self.ip_address}:{self.port}: {error_detail}"
+                logger.error(f"💥 [{self.plc_code}] CONNECTION FAILED - {error_msg} (Error: {error_type})")
+                raise PLCConnectionError(error_msg, self.plc_code) from e
 
     def disconnect(self) -> None:
         """PLC 연결 해제"""

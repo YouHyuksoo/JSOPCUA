@@ -26,11 +26,14 @@ export default function EditPollingGroupPage({ params }: { params: { id: string 
           getTags(1, 10000, undefined, true), // is_active=true인 태그만
           getPollingGroupTags(id)
         ]);
+        console.log('Polling Group Data:', groupData);
         setPollingGroup(groupData);
         setTags(allTagsData.items);
         setInitialTagIds(groupTagsData.map(tag => tag.id));
       } catch (error) {
-        toast.error('데이터 조회 실패');
+        console.error('데이터 조회 실패:', error);
+        toast.error(`데이터 조회 실패: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+        setPollingGroup(null);
       } finally {
         setLoading(false);
       }

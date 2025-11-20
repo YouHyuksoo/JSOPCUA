@@ -353,10 +353,7 @@ class OracleWriterThread:
                             SET last_value = ?,
                                 last_updated_at = ?
                             WHERE tag_address = ?
-                              AND plc_id = (
-                                  SELECT id FROM plc_connections
-                                  WHERE plc_code = ?
-                              )
+                              AND plc_code = ?
                         """, (
                             str(tag_value),
                             polling_data.timestamp.isoformat(),

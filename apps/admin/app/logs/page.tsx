@@ -1,12 +1,24 @@
 'use client';
 
 import { useState } from 'react';
-import { getLogs } from '@/lib/api/logs';
+import { getLogs, deleteLogs } from '@/lib/api/logs';
 import { LogEntry, LogType } from '@/lib/types/log';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function LogsPage() {
   const [logType, setLogType] = useState<LogType>('scada');
@@ -67,6 +79,22 @@ export default function LogsPage() {
     setPage(1);
   };
 
+  const handleDeleteLogs = async () => {
+    setLoading(true);
+    try {
+      await deleteLogs(logType);
+      toast.success(`${logType}.log 파일이 삭제되었습니다`);
+      setLogs([]);
+      setTotal(0);
+      setTotalPages(1);
+      setPage(1);
+    } catch (error) {
+      toast.error('로그 삭제 실패');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div>
       <div className="container mx-auto px-4 py-8">
@@ -91,6 +119,39 @@ export default function LogsPage() {
           <Button onClick={() => fetchLogs(1)} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
             {loading ? '로딩 중...' : '조회'}
           </Button>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                disabled={loading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                로그 삭제
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="bg-gray-900 border-gray-800">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="text-white">로그 삭제 확인</AlertDialogTitle>
+                <AlertDialogDescription className="text-gray-400">
+                  정말로 <span className="text-red-400 font-semibold">{logType}.log</span> 파일의 모든 로그를 삭제하시겠습니까?
+                  <br />
+                  이 작업은 되돌릴 수 없습니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white">
+                  취소
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteLogs}
+                  className="bg-red-600 hover:bg-red-700 text-white"
+                >
+                  삭제
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
 
         {/* 필터 */}

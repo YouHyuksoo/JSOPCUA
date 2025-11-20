@@ -150,10 +150,11 @@ export default function MachinesPage() {
           <Button
             onClick={() => setSyncDialogOpen(true)}
             disabled={syncing}
-            className="bg-green-600 hover:bg-green-700"
+            variant="outline"
+            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Oracle 동기화
+            Oracle에서 동기화
           </Button>
           <Link href="/machines/new">
             <Button className="bg-blue-600 hover:bg-blue-700">

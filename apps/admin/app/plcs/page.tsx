@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import DeleteDialog from '@/components/DeleteDialog';
 import OracleSyncDialog from '@/components/OracleSyncDialog';
 import { toast } from 'sonner';
+import { RefreshCw, Plus } from 'lucide-react';
 
 export default function PLCsPage() {
   const [plcs, setPLCs] = useState<PLC[]>([]);
@@ -99,12 +100,17 @@ export default function PLCsPage() {
           <div className="flex gap-2">
             <Button
               onClick={() => setShowOracleSync(true)}
-              className="bg-orange-600 hover:bg-orange-700"
+              variant="outline"
+              className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white"
             >
+              <RefreshCw className="h-4 w-4 mr-2" />
               Oracle에서 동기화
             </Button>
             <Link href="/plcs/new">
-              <Button className="bg-blue-600 hover:bg-blue-700">새 PLC</Button>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                새 PLC 추가
+              </Button>
             </Link>
           </div>
         </div>

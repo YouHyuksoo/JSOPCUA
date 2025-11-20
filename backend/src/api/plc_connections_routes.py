@@ -360,7 +360,6 @@ def get_plc_connection(plc_id: int, db: SQLiteManager = Depends(get_db)):
         updated_at=row[12] if row[12] else datetime.now().isoformat()
     )
 
-
 # ==============================================================================
 # POST /api/plc-connections/{id}/test - Test PLC connection
 # ==============================================================================

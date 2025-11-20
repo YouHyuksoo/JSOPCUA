@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getPollingGroups, startPollingGroup, stopPollingGroup, deletePollingGroup } from '@/lib/api/polling-groups';
+import { getPollingGroups, deletePollingGroup } from '@/lib/api/polling-groups';
 import { PollingGroup } from '@/lib/types/polling-group';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -27,32 +27,6 @@ export default function PollingGroupsPage() {
   useEffect(() => {
     fetchGroups();
   }, []);
-
-  const handleStart = async (id: number) => {
-    try {
-      const result = await startPollingGroup(id);
-      toast.success(result.message);
-      // 로컬 상태 업데이트
-      setGroups(groups.map(g =>
-        g.id === id ? { ...g, status: 'running' as const } : g
-      ));
-    } catch (error) {
-      toast.error('폴링 시작 실패');
-    }
-  };
-
-  const handleStop = async (id: number) => {
-    try {
-      const result = await stopPollingGroup(id);
-      toast.success(result.message);
-      // 로컬 상태 업데이트
-      setGroups(groups.map(g =>
-        g.id === id ? { ...g, status: 'stopped' as const } : g
-      ));
-    } catch (error) {
-      toast.error('폴링 중지 실패');
-    }
-  };
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -89,7 +63,6 @@ export default function PollingGroupsPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">이름</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">주기(ms)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">태그 수</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">상태</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">작업</th>
               </tr>
             </thead>
@@ -105,33 +78,7 @@ export default function PollingGroupsPage() {
                       <span className="text-gray-500">개</span>
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs rounded border ${
-                      group.status === 'running'
-                        ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                        : 'bg-gray-500/10 text-gray-400 border-gray-500/20'
-                    }`}>
-                      {group.status}
-                    </span>
-                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                    <Button
-                      size="sm"
-                      className="bg-green-600 hover:bg-green-700"
-                      onClick={() => handleStart(group.id)}
-                      disabled={group.status === 'running'}
-                    >
-                      시작
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      className="bg-red-500/10 text-red-500 hover:bg-red-500/20"
-                      onClick={() => handleStop(group.id)}
-                      disabled={group.status === 'stopped'}
-                    >
-                      중지
-                    </Button>
                     <Link href={`/polling-groups/${group.id}`}>
                       <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">편집</Button>
                     </Link>

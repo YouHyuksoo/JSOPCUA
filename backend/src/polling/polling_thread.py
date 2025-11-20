@@ -58,6 +58,10 @@ class PollingThread(ABC):
         self.stop_event = threading.Event()
         self.state = ThreadState.STOPPED
 
+        # Dedicated PLC connection (acquired on start, released on stop)
+        self._plc_connection = None
+        self._connection_pool = None
+
         # Statistics
         self.last_poll_time: Optional[datetime] = None
         self.total_polls = 0
@@ -66,17 +70,55 @@ class PollingThread(ABC):
         self.avg_poll_time_ms = 0.0
         self._poll_times = []  # Track recent poll times for averaging
 
+        # Connection failure tracking for backoff strategy
+        self.consecutive_failures = 0
+        self.last_connection_check = None
+        self.skip_polls_until = None  # Timestamp until which to skip polling
+        self.last_error_message: Optional[str] = None  # Last error message for status reporting
+
         logger.info(f"PollingThread initialized: group={group.group_name}, mode={group.mode.value}")
+
+    def reset_statistics(self):
+        """
+        Reset all statistics and error tracking
+
+        Called when starting a polling group to clear previous error history.
+        """
+        self.total_polls = 0
+        self.success_count = 0
+        self.error_count = 0
+        self.avg_poll_time_ms = 0.0
+        self._poll_times = []
+        self.consecutive_failures = 0
+        self.last_error_message = None
+        self.skip_polls_until = None
+        logger.info(f"Statistics reset for group {self.group.group_name}")
 
     def start(self):
         """
         Start the polling thread
 
         Creates and starts a new thread that runs the polling loop.
+        Acquires a dedicated PLC connection that will be held until stop().
+        Resets statistics and error history before starting.
         """
         if self.state == ThreadState.RUNNING:
             logger.warning(f"Thread already running for group {self.group.group_name}")
             return
+
+        # Reset statistics and error history
+        self.reset_statistics()
+
+        # Acquire dedicated PLC connection for this thread
+        try:
+            self._connection_pool = self.pool_manager._get_pool(self.group.plc_code)
+            self._plc_connection = self._connection_pool.get_connection(timeout=10)
+            logger.info(f"✅ [{self.group.group_name}] Acquired dedicated PLC connection")
+        except Exception as e:
+            logger.error(f"❌ [{self.group.group_name}] Failed to acquire PLC connection: {e}")
+            self.last_error_message = f"Failed to acquire PLC connection: {e}"
+            self.state = ThreadState.ERROR
+            raise
 
         self.stop_event.clear()
         self.state = ThreadState.RUNNING
@@ -93,6 +135,7 @@ class PollingThread(ABC):
         Stop the polling thread gracefully
 
         Sets stop event and waits for thread to terminate.
+        Releases the dedicated PLC connection back to the pool.
         Thread will complete current polling cycle before stopping.
 
         Args:
@@ -100,6 +143,8 @@ class PollingThread(ABC):
         """
         if self.state != ThreadState.RUNNING:
             logger.warning(f"Thread not running for group {self.group.group_name}")
+            # Still try to release connection if it exists
+            self._release_connection()
             return
 
         logger.info(f"Stopping polling thread for group {self.group.group_name}")
@@ -117,11 +162,27 @@ class PollingThread(ABC):
         else:
             self.state = ThreadState.STOPPED
 
+        # Release PLC connection back to pool
+        self._release_connection()
+
+    def _release_connection(self):
+        """Release the dedicated PLC connection back to the pool"""
+        if self._plc_connection and self._connection_pool:
+            try:
+                self._connection_pool.return_connection(self._plc_connection)
+                logger.info(f"🔓 [{self.group.group_name}] Released PLC connection back to pool")
+            except Exception as e:
+                logger.error(f"❌ [{self.group.group_name}] Error releasing connection: {e}")
+            finally:
+                self._plc_connection = None
+                self._connection_pool = None
+
     def _run_wrapper(self):
         """
         Wrapper around run() to catch unhandled exceptions
 
         Ensures thread state is properly updated even if run() crashes.
+        Always releases the dedicated connection on exit.
         """
         try:
             self.run()
@@ -130,6 +191,8 @@ class PollingThread(ABC):
             self.state = ThreadState.ERROR
             raise PollingThreadError(f"Thread crashed for group {self.group.group_name}: {e}")
         finally:
+            # Always release connection when thread exits
+            self._release_connection()
             if self.state != ThreadState.ERROR:
                 self.state = ThreadState.STOPPED
 
@@ -147,19 +210,34 @@ class PollingThread(ABC):
         """
         Execute a single polling cycle
 
-        Reads all tags for this group and stores result in data queue.
+        Reads all tags for this group using the dedicated connection.
+        Uses the connection acquired in start() - no get/return overhead!
 
         Returns:
             True if poll succeeded, False if poll failed
         """
+        current_time = time.perf_counter()
+
+        # Check if we should skip this poll due to previous connection failures
+        if self.skip_polls_until and current_time < self.skip_polls_until:
+            remaining = self.skip_polls_until - current_time
+            logger.debug(
+                f"Skipping poll for group={self.group.group_name} "
+                f"(PLC connection unavailable, retry in {remaining:.1f}s)"
+            )
+            return False
+
+        # Ensure we have a dedicated connection
+        if not self._plc_connection or not self._plc_connection.client:
+            logger.error(f"❌ [{self.group.group_name}] No dedicated connection available")
+            self._handle_connection_unavailable()
+            return False
+
         start_time = time.perf_counter()
 
         try:
-            # Read tags using PoolManager
-            tag_values = self.pool_manager.read_batch(
-                self.group.plc_code,
-                self.group.tag_addresses
-            )
+            # Read tags directly using dedicated connection (no pool get/return!)
+            tag_values = self._plc_connection.client.read_batch(self.group.tag_addresses)
 
             # Calculate poll time
             end_time = time.perf_counter()
@@ -187,6 +265,20 @@ class PollingThread(ABC):
             self.success_count += 1
             self._update_avg_poll_time(poll_time_ms)
 
+            # Reset error counter on success
+            if self._plc_connection:
+                self._plc_connection.reset_error()
+
+            # Reset failure counter on success
+            if self.consecutive_failures > 0:
+                logger.info(
+                    f"PLC connection recovered for group={self.group.group_name} "
+                    f"after {self.consecutive_failures} failures"
+                )
+                self.consecutive_failures = 0
+                self.skip_polls_until = None
+                self.last_error_message = None  # Clear error message on success
+
             logger.debug(
                 f"Poll successful: group={self.group.group_name}, "
                 f"tags={len(tag_values)}, time={poll_time_ms:.2f}ms"
@@ -202,6 +294,10 @@ class PollingThread(ABC):
             self.total_polls += 1
             self.error_count += 1
 
+            # Increment error counter on dedicated connection
+            if self._plc_connection:
+                self._plc_connection.increment_error()
+
             # Log to console
             logger.error(
                 f"Poll failed: group={self.group.group_name}, "
@@ -212,8 +308,13 @@ class PollingThread(ABC):
             error_type = type(e).__name__
             error_message = str(e)
 
-            # Determine specific error type
+            # Store last error message for status reporting
+            self.last_error_message = f"{error_type}: {error_message}"
+
+            # Check if it's a connection error - apply backoff strategy
             if "connection" in error_message.lower() or "connect" in error_message.lower():
+                self._handle_connection_failure()
+
                 failure_logger.log_connection_failure(
                     plc_code=self.group.plc_code,
                     group_name=self.group.group_name,
@@ -241,6 +342,51 @@ class PollingThread(ABC):
 
             return False
 
+    def _handle_connection_unavailable(self):
+        """
+        Handle PLC connection unavailable (before attempting to poll)
+
+        Applies exponential backoff strategy to avoid wasting resources
+        on repeated connection attempts.
+        """
+        self.consecutive_failures += 1
+
+        # Exponential backoff: 5s, 10s, 30s, 60s, 120s, then cap at 300s (5min)
+        backoff_intervals = [5, 10, 30, 60, 120, 300]
+        backoff_index = min(self.consecutive_failures - 1, len(backoff_intervals) - 1)
+        backoff_seconds = backoff_intervals[backoff_index]
+
+        self.skip_polls_until = time.perf_counter() + backoff_seconds
+
+        # Store error message for status reporting
+        self.last_error_message = f"PLC {self.group.plc_code} unavailable (connection pool has no available connections)"
+
+        logger.warning(
+            f"PLC {self.group.plc_code} unavailable for group={self.group.group_name} "
+            f"(failure #{self.consecutive_failures}). Skipping polls for {backoff_seconds}s"
+        )
+
+    def _handle_connection_failure(self):
+        """
+        Handle connection failure during polling attempt
+
+        Similar to _handle_connection_unavailable but called after
+        an actual connection error occurred.
+        """
+        self.consecutive_failures += 1
+
+        # Same backoff strategy
+        backoff_intervals = [5, 10, 30, 60, 120, 300]
+        backoff_index = min(self.consecutive_failures - 1, len(backoff_intervals) - 1)
+        backoff_seconds = backoff_intervals[backoff_index]
+
+        self.skip_polls_until = time.perf_counter() + backoff_seconds
+
+        logger.warning(
+            f"Connection failed for PLC {self.group.plc_code}, group={self.group.group_name} "
+            f"(consecutive failure #{self.consecutive_failures}). Backing off for {backoff_seconds}s"
+        )
+
     def _update_avg_poll_time(self, poll_time_ms: float):
         """
         Update running average of poll times
@@ -260,8 +406,20 @@ class PollingThread(ABC):
         Get current thread status
 
         Returns:
-            Dictionary with status information
+            Dictionary with status information including connection state and error messages
         """
+        # Calculate success rate
+        success_rate = 0.0
+        if self.total_polls > 0:
+            success_rate = (self.success_count / self.total_polls) * 100
+
+        # Calculate next retry time if in backoff
+        next_retry_in = None
+        if self.skip_polls_until:
+            remaining = self.skip_polls_until - time.perf_counter()
+            if remaining > 0:
+                next_retry_in = round(remaining, 1)
+
         return {
             "group_id": self.group.group_id,
             "group_name": self.group.group_name,
@@ -271,7 +429,11 @@ class PollingThread(ABC):
             "total_polls": self.total_polls,
             "success_count": self.success_count,
             "error_count": self.error_count,
-            "avg_poll_time_ms": round(self.avg_poll_time_ms, 2)
+            "success_rate": round(success_rate, 1),
+            "avg_poll_time_ms": round(self.avg_poll_time_ms, 2),
+            "consecutive_failures": self.consecutive_failures,
+            "last_error": self.last_error_message,
+            "next_retry_in": next_retry_in  # Seconds until next retry (None if not in backoff)
         }
 
     def is_running(self) -> bool:

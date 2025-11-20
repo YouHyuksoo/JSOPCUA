@@ -204,6 +204,35 @@ class PoolManager:
         """
         return len(self._pools)
 
+    def is_plc_available(self, plc_code: str) -> bool:
+        """
+        PLC 연결 가능 여부 확인
+
+        Args:
+            plc_code: PLC 코드
+
+        Returns:
+            연결 가능 여부 (pool에 사용 가능한 연결이 있거나 새로 생성 가능하면 True)
+        """
+        try:
+            pool = self._get_pool(plc_code)
+            # Pool이 존재하고 최소 하나의 연결이 있거나 생성 가능하면 True
+            stats = pool.get_stats()
+            # 사용 가능한 연결이 있거나, pool이 max_size보다 작으면 새로 생성 가능
+            available = stats['available_connections']
+            total = stats['total_connections']
+            max_size = stats['max_size']
+
+            is_available = available > 0 or total < max_size
+            logger.debug(f"[{plc_code}] Availability check: available={available}, total={total}, max={max_size} => {is_available}")
+            return is_available
+        except PLCInactiveError:
+            logger.warning(f"[{plc_code}] PLC is inactive")
+            return False
+        except Exception as e:
+            logger.error(f"[{plc_code}] Error checking PLC availability: {e}", exc_info=True)
+            return False
+
     def get_pool_stats(self, plc_code: str = None) -> Dict[str, Any]:
         """
         Connection Pool 통계 조회

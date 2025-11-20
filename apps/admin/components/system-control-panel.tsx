@@ -35,7 +35,7 @@ export function SystemControlPanel() {
 
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 3000); // Update every 3 seconds
+    const interval = setInterval(fetchStatus, 5000); // Update every 5 seconds
     return () => clearInterval(interval);
   }, []);
 

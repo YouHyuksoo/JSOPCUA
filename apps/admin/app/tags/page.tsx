@@ -184,13 +184,14 @@ export default function TagsPage() {
           <Button
             onClick={() => setSyncDialogOpen(true)}
             disabled={syncing}
-            className="bg-green-600 hover:bg-green-700"
+            variant="outline"
+            className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
-            Oracle 동기화
+            Oracle에서 동기화
           </Button>
           <Link href="/tags/upload">
-            <Button variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">
+            <Button variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700 text-white">
               <Upload className="h-4 w-4 mr-2" />
               CSV 업로드
             </Button>

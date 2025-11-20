@@ -2,8 +2,16 @@ export interface PollingGroup {
   id: number;
   name: string;
   plc_code: string;
+  line_code?: string | null;
+  machine_code?: string | null;
   workstage_code?: string | null;
+  mode: "FIXED" | "HANDSHAKE";
   polling_interval: number;
+  group_category?: string | null;
+  trigger_bit_address?: string | null;
+  trigger_bit_offset?: number;
+  auto_reset_trigger?: boolean;
+  priority?: string | null;
   is_active: boolean;
   status: "stopped" | "running" | "error";
   last_poll_time?: string;

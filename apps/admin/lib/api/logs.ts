@@ -9,9 +9,14 @@ export const getLogs = async (params: LogQueryParams) => {
 
 export const downloadLogs = async (params: LogQueryParams) => {
   const { log_type, ...queryParams } = params;
-  const response = await apiClient.get(`/logs/${log_type}/download`, { 
+  const response = await apiClient.get(`/logs/${log_type}/download`, {
     params: queryParams,
     responseType: 'blob'
   });
+  return response.data;
+};
+
+export const deleteLogs = async (logType: string) => {
+  const response = await apiClient.delete(`/logs/${logType}`);
   return response.data;
 };

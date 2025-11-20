@@ -2,24 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { 
-  Moon, 
-  Sun, 
-  Search, 
-  Bell, 
-  User, 
-  Settings, 
+import {
+  User,
+  Settings,
   LogOut,
   Activity,
   Server,
   CheckCircle2,
   AlertCircle,
-  Loader2,
-  X
+  Loader2
 } from "lucide-react"
-import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import {
   DropdownMenu,
@@ -33,12 +26,8 @@ import { getSystemStatus, SystemStatus } from "@/lib/api/system"
 import { cn } from "@/lib/utils"
 
 export function Header() {
-  const { setTheme } = useTheme()
   const router = useRouter()
-  const [searchQuery, setSearchQuery] = useState("")
   const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null)
-  const [showSearch, setShowSearch] = useState(false)
-  const [notificationCount] = useState(3)
 
   // 시스템 상태 폴링
   useEffect(() => {
@@ -52,20 +41,9 @@ export function Header() {
     }
 
     fetchStatus()
-    const interval = setInterval(fetchStatus, 5000)
+    const interval = setInterval(fetchStatus, 10000) // Update every 10 seconds
     return () => clearInterval(interval)
   }, [])
-
-  // 검색 기능
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      // 검색 로직 구현 (예: 태그, PLC, 기계 검색)
-      router.push(`/tags?search=${encodeURIComponent(searchQuery)}`)
-      setSearchQuery("")
-      setShowSearch(false)
-    }
-  }
 
   // 시스템 상태 배지
   const getStatusBadge = () => {
@@ -136,139 +114,46 @@ export function Header() {
             <h1 className="text-xl font-bold text-white">JSScada Admin</h1>
             <p className="text-xs text-gray-400 hidden sm:block">PLC Data Collection & Monitoring</p>
           </div>
-          
-          {/* 시스템 상태 */}
-          {getStatusBadge()}
         </div>
 
-        {/* 중앙: 검색 */}
-        <div className="flex-1 max-w-md mx-4">
-          {showSearch ? (
-            <form onSubmit={handleSearch} className="relative">
-              <Input
-                type="text"
-                placeholder="태그, PLC, 기계 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pr-10 bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-blue-500"
-                autoFocus
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-400 hover:text-white"
-                onClick={() => {
-                  setShowSearch(false)
-                  setSearchQuery("")
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </form>
-          ) : (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full justify-start text-gray-400 hover:text-white hover:bg-gray-800/50"
-              onClick={() => setShowSearch(true)}
-            >
-              <Search className="h-4 w-4 mr-2" />
-              <span className="hidden sm:inline">검색...</span>
-              <kbd className="ml-auto hidden lg:inline-flex h-5 select-none items-center gap-1 rounded border border-gray-700 bg-gray-900 px-1.5 font-mono text-[10px] font-medium text-gray-400">
-                <span className="text-xs">⌘</span>K
-              </kbd>
-            </Button>
-          )}
+        {/* 중앙: 시스템 상태 */}
+        <div className="flex-1 flex justify-center">
+          {getStatusBadge()}
         </div>
 
         {/* 오른쪽: 액션 버튼들 */}
         <div className="flex items-center gap-2">
-          {/* 알림 */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="relative bg-gray-900/50 border-gray-800 hover:bg-gray-800"
-              >
-                <Bell className="h-5 w-5 text-gray-400" />
-                {notificationCount > 0 && (
-                  <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 flex items-center justify-center text-[10px] font-bold text-white">
-                    {notificationCount > 9 ? "9+" : notificationCount}
-                  </span>
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-80 bg-gray-900 border-gray-800">
-              <DropdownMenuLabel className="text-white">알림</DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-gray-800" />
-              <div className="p-4 text-center text-sm text-gray-400">
-                새로운 알림이 없습니다
-              </div>
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* 시스템 모니터링 */}
           <Button
             variant="ghost"
             size="icon"
-            className="bg-gray-900/50 border-gray-800 hover:bg-gray-800"
+            className="hover:bg-gray-800"
             onClick={() => router.push("/polling-ws")}
             title="시스템 모니터링"
           >
-            <Activity className="h-5 w-5 text-gray-400" />
+            <Activity className="h-5 w-5 text-gray-400 hover:text-white" />
           </Button>
 
-          {/* 테마 토글 */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="bg-gray-900/50 border-gray-800 hover:bg-gray-800"
-              >
-                <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0 text-gray-400" />
-                <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100 text-gray-400" />
-                <span className="sr-only">테마 변경</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-gray-900 border-gray-800">
-              <DropdownMenuItem 
-                onClick={() => setTheme("light")} 
-                className="text-gray-300 hover:bg-gray-800 cursor-pointer"
-              >
-                <Sun className="h-4 w-4 mr-2" />
-                라이트 모드
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setTheme("dark")} 
-                className="text-gray-300 hover:bg-gray-800 cursor-pointer"
-              >
-                <Moon className="h-4 w-4 mr-2" />
-                다크 모드
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => setTheme("system")} 
-                className="text-gray-300 hover:bg-gray-800 cursor-pointer"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                시스템 설정
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* 설정 */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hover:bg-gray-800"
+            onClick={() => router.push("/settings")}
+            title="설정"
+          >
+            <Settings className="h-5 w-5 text-gray-400 hover:text-white" />
+          </Button>
 
           {/* 사용자 메뉴 */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="bg-gray-900/50 border-gray-800 hover:bg-gray-800"
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-gray-800"
               >
-                <div className="h-8 w-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
-                  <User className="h-4 w-4 text-white" />
-                </div>
+                <User className="h-5 w-5 text-gray-400 hover:text-white" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56 bg-gray-900 border-gray-800">
@@ -279,14 +164,7 @@ export function Header() {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-gray-800" />
-              <DropdownMenuItem 
-                onClick={() => router.push("/settings")}
-                className="text-gray-300 hover:bg-gray-800 cursor-pointer"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                설정
-              </DropdownMenuItem>
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 onClick={() => router.push("/dashboard")}
                 className="text-gray-300 hover:bg-gray-800 cursor-pointer"
               >
@@ -294,7 +172,7 @@ export function Header() {
                 대시보드
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-gray-800" />
-              <DropdownMenuItem 
+              <DropdownMenuItem
                 className="text-red-400 hover:bg-gray-800 cursor-pointer"
                 onClick={() => {
                   // 로그아웃 로직

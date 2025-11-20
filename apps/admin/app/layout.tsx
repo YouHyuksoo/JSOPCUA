@@ -1,5 +1,6 @@
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
+import { Toaster as ShadcnToaster } from '@/components/ui/toaster'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Sidebar } from '@/components/sidebar'
 import { Header } from '@/components/header'
@@ -33,6 +34,7 @@ export default function RootLayout({
             </div>
           </div>
           <Toaster />
+          <ShadcnToaster />
         </ThemeProvider>
       </body>
     </html>

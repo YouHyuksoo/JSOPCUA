@@ -152,7 +152,7 @@ class ConnectionPool:
             except Exception as e:
                 logger.error(f"[{self.plc_code}] Cleanup thread error: {e}")
 
-    def get_connection(self, timeout: int = 5) -> PooledConnection:
+    def get_connection(self, timeout: int = 10) -> PooledConnection:
         """
         Connection Pool에서 연결 가져오기
 
@@ -160,7 +160,7 @@ class ConnectionPool:
         Pool이 가득 찬 경우 대기하거나 타임아웃 에러를 발생시킵니다.
 
         Args:
-            timeout: 대기 타임아웃 (초)
+            timeout: 대기 타임아웃 (초, 기본 10초)
 
         Returns:
             PooledConnection
@@ -185,8 +185,10 @@ class ConnectionPool:
                     logger.info(f"[{self.plc_code}] Creating new connection (total: {self._total_connections}/{self.max_size})")
                 else:
                     # Pool 고갈
-                    error_msg = f"Connection pool exhausted (max: {self.max_size})"
-                    logger.error(f"[{self.plc_code}] {error_msg}")
+                    available = self._available.qsize()
+                    in_use = self._total_connections - available
+                    error_msg = f"Connection pool exhausted (max: {self.max_size}, in_use: {in_use}, available: {available})"
+                    logger.error(f"[{self.plc_code}] Pool exhausted for {self.ip_address}:{self.port} - {error_msg}")
                     raise PLCPoolExhaustedError(error_msg, self.plc_code)
 
             # 새 연결 생성
@@ -194,15 +196,18 @@ class ConnectionPool:
             conn = PooledConnection(client, self.plc_id)
 
             try:
+                logger.info(f"[{self.plc_code}] Attempting connection to {self.ip_address}:{self.port} (timeout={self.timeout}s)")
                 client.connect()
                 conn.is_connected = True
                 conn.mark_used()
+                logger.info(f"[{self.plc_code}] Successfully connected to {self.ip_address}:{self.port}")
                 return conn
 
             except Exception as e:
                 # 연결 실패 시 카운터 감소
                 with self._lock:
                     self._total_connections -= 1
+                logger.error(f"[{self.plc_code}] Connection FAILED to {self.ip_address}:{self.port} - Error: {e}")
                 raise
 
     def return_connection(self, conn: PooledConnection):

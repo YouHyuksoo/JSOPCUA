@@ -142,19 +142,29 @@ async def websocket_endpoint(websocket: WebSocket):
 
     Clients receive automatic status updates every second.
     """
-    await manager.connect(websocket)
+    try:
+        await manager.connect(websocket)
+        logger.info("WebSocket client connected")
+    except Exception as e:
+        logger.error(f"Failed to accept WebSocket connection: {e}", exc_info=True)
+        return
 
     try:
         # Send initial status
-        await manager.send_status(websocket)
+        try:
+            await manager.send_status(websocket)
+        except Exception as e:
+            logger.error(f"Failed to send initial status: {e}", exc_info=True)
+            return
 
         # Keep connection alive and handle messages
         while True:
             try:
                 # Wait for messages from client (heartbeat, commands, etc.)
+                # Longer timeout to prevent unnecessary disconnections
                 data = await asyncio.wait_for(
                     websocket.receive_text(),
-                    timeout=60.0  # 60 second timeout
+                    timeout=120.0  # 120 second timeout (2 minutes)
                 )
 
                 # Handle client messages
@@ -162,21 +172,27 @@ async def websocket_endpoint(websocket: WebSocket):
                     message = json.loads(data)
                     if message.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
+                    elif message.get("type") == "pong":
+                        # Client responded to our ping, connection is alive
+                        pass
                     elif message.get("type") == "get_status":
                         await manager.send_status(websocket)
                 except json.JSONDecodeError:
-                    pass
+                    logger.warning(f"Invalid JSON received: {data}")
 
             except asyncio.TimeoutError:
-                # Send ping to keep connection alive
+                # No message received in 120 seconds, send ping to check if client is alive
                 try:
                     await websocket.send_json({"type": "ping"})
-                except:
+                    logger.debug("Sent ping to client after timeout")
+                except Exception as e:
+                    logger.error(f"Failed to send ping: {e}")
                     break
 
     except WebSocketDisconnect:
-        pass
+        logger.info("WebSocket client disconnected normally")
     except Exception as e:
-        logger.error(f"WebSocket error: {e}")
+        logger.error(f"WebSocket error: {e}", exc_info=True)
     finally:
         manager.disconnect(websocket)
+        logger.info("WebSocket connection closed")

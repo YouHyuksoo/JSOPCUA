@@ -30,6 +30,21 @@ from .monitor_routes import router as monitor_router
 initialize_logging()
 logger = logging.getLogger(__name__)
 
+# Configure uvicorn loggers to use custom format
+uvicorn_access_logger = logging.getLogger("uvicorn.access")
+uvicorn_error_logger = logging.getLogger("uvicorn.error")
+uvicorn_logger = logging.getLogger("uvicorn")
+
+# Disable uvicorn's default handlers and let them use root logger's handlers
+uvicorn_access_logger.handlers.clear()
+uvicorn_error_logger.handlers.clear()
+uvicorn_logger.handlers.clear()
+
+# Set propagate to True so they use root logger's format
+uvicorn_access_logger.propagate = True
+uvicorn_error_logger.propagate = True
+uvicorn_logger.propagate = True
+
 # Global instances
 pool_manager: PoolManager = None
 polling_engine: PollingEngine = None
@@ -61,10 +76,11 @@ async def lifespan(app: FastAPI):
     backend_dir = current_file.parent.parent.parent  # .../backend
     db_path = str(backend_dir / "data" / "scada.db")
 
-    # Initialize PoolManager
-    pool_manager = PoolManager(db_path)
+    # Initialize PoolManager with larger pool size
+    # Pool size increased to 10 to handle multiple concurrent polling groups
+    pool_manager = PoolManager(db_path, pool_size=10)
     pool_manager.initialize()
-    logger.info(f"✅ PoolManager initialized: {pool_manager.get_plc_count()} PLC(s)")
+    logger.info(f"✅ PoolManager initialized: {pool_manager.get_plc_count()} PLC(s) (pool_size=10)")
 
     # Initialize PollingGroupManager (singleton)
     polling_group_manager = PollingGroupManager(db_path, pool_manager)
