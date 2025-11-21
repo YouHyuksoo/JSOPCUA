@@ -6,7 +6,7 @@ Provides CRUD operations for PLC tags including CSV bulk import
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, status, UploadFile, File
+from fastapi import APIRouter, Depends, status, UploadFile, File, HTTPException
 from src.database.sqlite_manager import SQLiteManager
 from .models import TagCreate, TagUpdate, TagResponse, TagImportResult, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
@@ -45,11 +45,9 @@ def create_tag(tag: TagCreate, db: SQLiteManager = Depends(get_db)):
     """
     # Validate codes are not empty
     if not tag.plc_code or not tag.plc_code.strip():
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="plc_code cannot be empty")
 
     if not tag.machine_code or not tag.machine_code.strip():
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="machine_code cannot be empty")
 
     if tag.polling_group_id is not None:
@@ -212,7 +210,6 @@ def get_oracle_connection_info():
         config = load_config_from_env()
         return config.to_dict()
     except Exception as e:
-        from fastapi import HTTPException
         from src.config.logging_config import get_logger
 
         logger = get_logger(__name__)
@@ -251,7 +248,6 @@ def sync_tags_from_oracle(db: SQLiteManager = Depends(get_db)):
     """
     from src.oracle_writer.oracle_helper import get_oracle_tags
     from src.config.logging_config import get_logger
-    from fastapi import HTTPException
 
     logger = get_logger(__name__)
 

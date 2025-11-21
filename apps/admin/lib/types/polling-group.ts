@@ -12,6 +12,7 @@ export interface PollingGroup {
   trigger_bit_offset?: number;
   auto_reset_trigger?: boolean;
   priority?: string | null;
+  description?: string | null;
   is_active: boolean;
   status: "stopped" | "running" | "error";
   last_poll_time?: string;
@@ -26,6 +27,7 @@ export interface CreatePollingGroupRequest {
   plc_code: string;
   workstage_code?: string;
   polling_interval: number;
+  description?: string;
   is_active: boolean;
   tag_ids: number[];
 }

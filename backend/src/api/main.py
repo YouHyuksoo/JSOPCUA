@@ -25,6 +25,7 @@ from .alarm_routes import router as alarm_router
 from .logs_routes import router as logs_router
 from .websocket_monitor import websocket_monitor_endpoint, set_monitor_engine
 from .monitor_routes import router as monitor_router
+from .oracle_data_routes import router as oracle_data_router
 
 # Initialize logging on module import
 initialize_logging()
@@ -191,6 +192,7 @@ app.include_router(polling_groups_router, tags=["polling-groups"])
 app.include_router(alarm_router, tags=["alarms"])
 app.include_router(logs_router, tags=["logs"])
 app.include_router(monitor_router, tags=["monitor"])
+app.include_router(oracle_data_router, tags=["oracle-data"])
 app.include_router(system_router)  # System control (start/stop)
 app.include_router(polling_router)
 # NOTE: buffer_router is included but components must be set via set_buffer_components()

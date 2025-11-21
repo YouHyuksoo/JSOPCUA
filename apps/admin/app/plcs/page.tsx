@@ -107,7 +107,7 @@ export default function PLCsPage() {
               Oracle에서 동기화
             </Button>
             <Link href="/plcs/new">
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button className="bg-blue-600 hover:bg-blue-700 text-white">
                 <Plus className="h-4 w-4 mr-2" />
                 새 PLC 추가
               </Button>

@@ -40,6 +40,7 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
     resolver: zodResolver(pollingGroupSchema),
     defaultValues: defaultValues ? {
       name: defaultValues.name,
+      description: defaultValues.description || '',
       polling_interval_ms: defaultValues.polling_interval,
       tag_ids: initialTagIds,
     } : {
@@ -163,7 +164,7 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
               <CardTitle className="text-white text-lg">기본 정보</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
                 <div>
                   <Label htmlFor="name" className="text-gray-300 text-sm">폴링 그룹 이름</Label>
                   <Input
@@ -173,6 +174,17 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                     placeholder="라인1_실시간그룹"
                   />
                   {errors.name && <p className="text-xs text-red-400 mt-1">{errors.name.message}</p>}
+                </div>
+
+                <div>
+                  <Label htmlFor="description" className="text-gray-300 text-sm">설명 (선택)</Label>
+                  <Input
+                    id="description"
+                    {...register('description')}
+                    className="bg-gray-800 border-gray-700 text-white mt-1.5"
+                    placeholder="폴링 그룹에 대한 설명을 입력하세요"
+                  />
+                  {errors.description && <p className="text-xs text-red-400 mt-1">{errors.description.message}</p>}
                 </div>
 
                 <div>

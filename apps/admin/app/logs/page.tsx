@@ -116,7 +116,7 @@ export default function LogsPage() {
               <SelectItem value="oracle_writer" className="text-gray-100 hover:bg-gray-800">oracle_writer.log</SelectItem>
             </SelectContent>
           </Select>
-          <Button onClick={() => fetchLogs(1)} disabled={loading} className="bg-blue-600 hover:bg-blue-700">
+          <Button onClick={() => fetchLogs(1)} disabled={loading} className="bg-blue-600 hover:bg-blue-700 text-white">
             {loading ? '로딩 중...' : '조회'}
           </Button>
           <AlertDialog>
@@ -180,7 +180,7 @@ export default function LogsPage() {
                   size="sm"
                   variant={levels.includes(level) ? 'default' : 'outline'}
                   onClick={() => handleLevelToggle(level)}
-                  className={levels.includes(level) ? 'bg-blue-600' : 'bg-gray-800 border-gray-700'}
+                  className={levels.includes(level) ? 'bg-blue-600 text-white' : 'bg-gray-800 border-gray-700'}
                 >
                   {level}
                 </Button>
@@ -292,7 +292,7 @@ export default function LogsPage() {
                     disabled={loading}
                     size="sm"
                     variant={page === pageNum ? 'default' : 'outline'}
-                    className={page === pageNum ? 'bg-blue-600' : 'bg-gray-900 border-gray-800'}
+                    className={page === pageNum ? 'bg-blue-600 text-white' : 'bg-gray-900 border-gray-800'}
                   >
                     {pageNum}
                   </Button>

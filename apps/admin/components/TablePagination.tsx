@@ -86,7 +86,7 @@ export default function TablePagination({
                   onClick={() => onPageChange(page as number)}
                   className={
                     currentPage === page
-                      ? 'bg-blue-600 hover:bg-blue-700'
+                      ? 'bg-blue-600 hover:bg-blue-700 text-white'
                       : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
                   }
                 >

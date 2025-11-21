@@ -108,7 +108,7 @@ export default function SettingsPage() {
           </h1>
           <p className="text-gray-400 mt-1">환경 변수 (.env) 설정 관리</p>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+        <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
           {saving ? (
             <>
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />

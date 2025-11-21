@@ -7,7 +7,7 @@ Oracle 테이블과 SQLite 동기화를 위한 헬퍼 클래스
 - ICOM_MACHINE_MASTER (Oracle) ↔ machines (SQLite): 설비 정보
 - ICOM_PLC_MASTER (Oracle) ↔ plc_connections (SQLite): PLC 정보
 - ICOM_PLC_TAG_MASTER (Oracle) ↔ tags (SQLite): 태그 정보
-- ICOM_WORKSTAGE_MASTER (Oracle) ↔ processes (SQLite): 공정 정보
+- ICOM_WORKSTAGE_MASTER (Oracle) ↔ workstages (SQLite): 공정 정보
 """
 
 import oracledb
@@ -386,16 +386,16 @@ class OracleHelper:
             logger.error(f"Failed to fetch tags from Oracle: {e}")
             raise
 
-    def fetch_processes(self) -> List[Dict]:
+    def fetch_workstages(self) -> List[Dict]:
         """
-        Fetch all active processes from Oracle ICOM_WORKSTAGE_MASTER table
+        Fetch all active workstages from Oracle ICOM_WORKSTAGE_MASTER table
 
-        SQLite processes 테이블과 동기화하기 위한 데이터 조회
+        SQLite workstages 테이블과 동기화하기 위한 데이터 조회
 
         Returns:
-            List of dictionaries with process data:
-            - process_code: 공정 코드
-            - process_name: 공정명
+            List of dictionaries with workstage data:
+            - workstage_code: 공정 코드
+            - workstage_name: 공정명
             - description: 설명
             - sequence_order: 순서
 
@@ -422,28 +422,28 @@ class OracleHelper:
             cursor.execute(query)
             rows = cursor.fetchall()
 
-            processes = []
+            workstages = []
             for row in rows:
-                process = {
-                    'process_code': row[0].strip() if row[0] else None,
-                    'process_name': row[1].strip() if row[1] else None,
+                workstage = {
+                    'workstage_code': row[0].strip() if row[0] else None,
+                    'workstage_name': row[1].strip() if row[1] else None,
                     'description': row[2].strip() if row[2] and row[2] != '*' else '',
                     'sequence_order': int(row[3]) if row[3] is not None else 0
                 }
 
-                if not process['process_code'] or not process['process_name']:
-                    logger.warning(f"Skipping process with missing code or name: {row}")
+                if not workstage['workstage_code'] or not workstage['workstage_name']:
+                    logger.warning(f"Skipping workstage with missing code or name: {row}")
                     continue
 
-                processes.append(process)
+                workstages.append(workstage)
 
-            logger.info(f"Fetched {len(processes)} active processes from Oracle")
+            logger.info(f"Fetched {len(workstages)} active workstages from Oracle")
             cursor.close()
 
-            return processes
+            return workstages
 
         except oracledb.Error as e:
-            logger.error(f"Failed to fetch processes from Oracle: {e}")
+            logger.error(f"Failed to fetch workstages from Oracle: {e}")
             raise
 
 
@@ -499,17 +499,17 @@ def get_oracle_tags() -> List[Dict]:
         return oracle.fetch_data_by_mapping(mapping)
 
 
-def get_oracle_processes() -> List[Dict]:
+def get_oracle_workstages() -> List[Dict]:
     """
-    Convenience function to fetch processes from Oracle
-    ICOM_WORKSTAGE_MASTER (Oracle) → processes (SQLite)
+    Convenience function to fetch workstages from Oracle
+    ICOM_WORKSTAGE_MASTER (Oracle) → workstages (SQLite)
 
     Returns:
-        List of process dictionaries
+        List of workstage dictionaries
 
     Raises:
         Exception: If Oracle connection or query fails
     """
-    mapping = get_mapping("processes")
+    mapping = get_mapping("workstages")
     with OracleHelper() as oracle:
         return oracle.fetch_data_by_mapping(mapping)

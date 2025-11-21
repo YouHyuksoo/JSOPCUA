@@ -20,8 +20,8 @@ class Line:
 
 
 @dataclass
-class Process:
-    """공정 (processes 테이블)
+class Workstage:
+    """공정 (workstages 테이블)
 
     14자리 설비 코드 예시: KRCWO12ELOA101
     - KR: 국가 코드
@@ -33,8 +33,8 @@ class Process:
     """
     id: Optional[int] = None
     machine_code: Optional[str] = None  # machines.machine_code 참조
-    process_code: str = ""  # 14자리 설비 코드
-    process_name: str = ""
+    workstage_code: str = ""  # 14자리 설비 코드
+    workstage_name: str = ""
     description: Optional[str] = None
     sequence_order: int = 0
     is_active: bool = True

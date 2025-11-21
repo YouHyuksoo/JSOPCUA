@@ -52,7 +52,7 @@ export default function PollingGroupsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-100">폴링 그룹</h1>
           <Link href="/polling-groups/new">
-            <Button className="bg-blue-600 hover:bg-blue-700">새 폴링 그룹</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">새 폴링 그룹</Button>
           </Link>
         </div>
         <div className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
@@ -61,6 +61,7 @@ export default function PollingGroupsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">이름</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">설명</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">주기(ms)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">태그 수</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">작업</th>
@@ -71,6 +72,9 @@ export default function PollingGroupsPage() {
                 <tr key={group.id} className="hover:bg-gray-800/50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{group.name}</td>
+                  <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate" title={group.description || ''}>
+                    {group.description || '-'}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.polling_interval} ms</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                     <span className="inline-flex items-center gap-1">

@@ -332,7 +332,7 @@ export default function MonitorLayoutPage() {
           <Button
             onClick={handleSave}
             disabled={saving}
-            className="bg-blue-600 hover:bg-blue-700"
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Save className="h-4 w-4 mr-2" />
             {saving ? '저장 중...' : '저장'}

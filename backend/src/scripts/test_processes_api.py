@@ -1,8 +1,8 @@
 """
-Test script for Processes API
+Test script for Workstages API
 
 Feature 5: Database Management REST API
-Tests CRUD operations on /api/processes endpoints
+Tests CRUD operations on /api/workstages endpoints
 """
 
 import requests
@@ -25,10 +25,10 @@ def print_response(response: requests.Response, operation: str):
 
 
 def create_test_line():
-    """Create a test line for process testing"""
+    """Create a test line for workstage testing"""
     line_data = {
         "line_code": "TESTLINE",
-        "line_name": "Test Line for Processes",
+        "line_name": "Test Line for Workstages",
         "enabled": True
     }
     response = requests.post(f"{BASE_URL}/api/lines", json=line_data)
@@ -37,91 +37,91 @@ def create_test_line():
     return None
 
 
-def test_create_process(line_id: int):
-    """Test POST /api/processes"""
-    process_data = {
+def test_create_workstage(line_id: int):
+    """Test POST /api/workstages"""
+    workstage_data = {
         "line_id": line_id,
-        "process_sequence": 1,
-        "process_code": "KRCWO12ELOA101",  # 14-char format
-        "process_name": "Electroplating Process A",
+        "workstage_sequence": 1,
+        "workstage_code": "KRCWO12ELOA101",  # 14-char format
+        "workstage_name": "Electroplating Workstage A",
         "equipment_type": "ELO",
         "enabled": True
     }
-    response = requests.post(f"{BASE_URL}/api/processes", json=process_data)
-    print_response(response, "CREATE PROCESS")
+    response = requests.post(f"{BASE_URL}/api/workstages", json=workstage_data)
+    print_response(response, "CREATE WORKSTAGE")
     if response.status_code == 201:
         return response.json()["id"]
     return None
 
 
-def test_list_processes(line_id: Optional[int] = None):
-    """Test GET /api/processes"""
-    url = f"{BASE_URL}/api/processes?page=1&limit=10"
+def test_list_workstages(line_id: Optional[int] = None):
+    """Test GET /api/workstages"""
+    url = f"{BASE_URL}/api/workstages?page=1&limit=10"
     if line_id:
         url += f"&line_id={line_id}"
     response = requests.get(url)
-    print_response(response, f"LIST PROCESSES (line_id={line_id if line_id else 'all'})")
+    print_response(response, f"LIST WORKSTAGES (line_id={line_id if line_id else 'all'})")
 
 
-def test_get_process(process_id: int):
-    """Test GET /api/processes/{id}"""
-    response = requests.get(f"{BASE_URL}/api/processes/{process_id}")
-    print_response(response, f"GET PROCESS {process_id}")
+def test_get_workstage(workstage_id: int):
+    """Test GET /api/workstages/{id}"""
+    response = requests.get(f"{BASE_URL}/api/workstages/{workstage_id}")
+    print_response(response, f"GET WORKSTAGE {workstage_id}")
 
 
-def test_update_process(process_id: int):
-    """Test PUT /api/processes/{id}"""
+def test_update_workstage(workstage_id: int):
+    """Test PUT /api/workstages/{id}"""
     update_data = {
-        "process_name": "Electroplating Process A (Updated)",
+        "workstage_name": "Electroplating Workstage A (Updated)",
         "enabled": False
     }
-    response = requests.put(f"{BASE_URL}/api/processes/{process_id}", json=update_data)
-    print_response(response, f"UPDATE PROCESS {process_id}")
+    response = requests.put(f"{BASE_URL}/api/workstages/{workstage_id}", json=update_data)
+    print_response(response, f"UPDATE WORKSTAGE {workstage_id}")
 
 
-def test_delete_process(process_id: int):
-    """Test DELETE /api/processes/{id}"""
-    response = requests.delete(f"{BASE_URL}/api/processes/{process_id}")
-    print_response(response, f"DELETE PROCESS {process_id}")
+def test_delete_workstage(workstage_id: int):
+    """Test DELETE /api/workstages/{id}"""
+    response = requests.delete(f"{BASE_URL}/api/workstages/{workstage_id}")
+    print_response(response, f"DELETE WORKSTAGE {workstage_id}")
 
 
-def test_invalid_process_code(line_id: int):
-    """Test invalid process_code format"""
-    process_data = {
+def test_invalid_workstage_code(line_id: int):
+    """Test invalid workstage_code format"""
+    workstage_data = {
         "line_id": line_id,
-        "process_sequence": 2,
-        "process_code": "INVALID",  # Wrong format
-        "process_name": "Invalid Process",
+        "workstage_sequence": 2,
+        "workstage_code": "INVALID",  # Wrong format
+        "workstage_name": "Invalid Workstage",
         "enabled": True
     }
-    response = requests.post(f"{BASE_URL}/api/processes", json=process_data)
-    print_response(response, "CREATE PROCESS WITH INVALID CODE (Should fail)")
+    response = requests.post(f"{BASE_URL}/api/workstages", json=workstage_data)
+    print_response(response, "CREATE WORKSTAGE WITH INVALID CODE (Should fail)")
 
 
 def test_invalid_line_id():
     """Test with non-existent line_id"""
-    process_data = {
+    workstage_data = {
         "line_id": 99999,
-        "process_sequence": 1,
-        "process_code": "KRCWO12ELOB102",
-        "process_name": "Test Process",
+        "workstage_sequence": 1,
+        "workstage_code": "KRCWO12ELOB102",
+        "workstage_name": "Test Workstage",
         "enabled": True
     }
-    response = requests.post(f"{BASE_URL}/api/processes", json=process_data)
-    print_response(response, "CREATE PROCESS WITH INVALID LINE_ID (Should fail)")
+    response = requests.post(f"{BASE_URL}/api/workstages", json=workstage_data)
+    print_response(response, "CREATE WORKSTAGE WITH INVALID LINE_ID (Should fail)")
 
 
-def test_duplicate_process_code(line_id: int):
-    """Test duplicate process_code error"""
-    process_data = {
+def test_duplicate_workstage_code(line_id: int):
+    """Test duplicate workstage_code error"""
+    workstage_data = {
         "line_id": line_id,
-        "process_sequence": 2,
-        "process_code": "KRCWO12ELOA101",  # Same as first process
-        "process_name": "Duplicate Process",
+        "workstage_sequence": 2,
+        "workstage_code": "KRCWO12ELOA101",  # Same as first workstage
+        "workstage_name": "Duplicate Workstage",
         "enabled": True
     }
-    response = requests.post(f"{BASE_URL}/api/processes", json=process_data)
-    print_response(response, "CREATE DUPLICATE PROCESS (Should fail)")
+    response = requests.post(f"{BASE_URL}/api/workstages", json=workstage_data)
+    print_response(response, "CREATE DUPLICATE WORKSTAGE (Should fail)")
 
 
 def delete_test_line(line_id: int):
@@ -133,7 +133,7 @@ def delete_test_line(line_id: int):
 def main():
     """Run all tests"""
     print("\n" + "=" * 60)
-    print("PROCESSES API TEST SUITE")
+    print("WORKSTAGES API TEST SUITE")
     print("=" * 60)
 
     # Test server health
@@ -152,22 +152,22 @@ def main():
         return
 
     # Test CRUD operations
-    process_id = test_create_process(line_id)
+    workstage_id = test_create_workstage(line_id)
 
-    if process_id:
-        test_list_processes()
-        test_list_processes(line_id)
-        test_get_process(process_id)
-        test_update_process(process_id)
+    if workstage_id:
+        test_list_workstages()
+        test_list_workstages(line_id)
+        test_get_workstage(workstage_id)
+        test_update_workstage(workstage_id)
 
     # Test error cases
-    test_invalid_process_code(line_id)
+    test_invalid_workstage_code(line_id)
     test_invalid_line_id()
-    test_duplicate_process_code(line_id)
+    test_duplicate_workstage_code(line_id)
 
     # Cleanup
-    if process_id:
-        test_delete_process(process_id)
+    if workstage_id:
+        test_delete_workstage(workstage_id)
     delete_test_line(line_id)
 
     print("\n" + "=" * 60)

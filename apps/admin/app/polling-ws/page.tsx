@@ -20,33 +20,12 @@ export default function PollingWebSocketPage() {
   const [monitoringActive, setMonitoringActive] = useState(true);
   const [groupTagCounts, setGroupTagCounts] = useState<Record<number, number>>({});
   const [groupPlcStatus, setGroupPlcStatus] = useState<Record<number, 'connected' | 'connection_failed' | 'inactive' | 'unknown'>>({});
+  const [groupPlcInfo, setGroupPlcInfo] = useState<Record<number, { ip?: string; port?: number; name?: string }>>({});
+  const [checkingPlc, setCheckingPlc] = useState<Record<number, boolean>>({});
   const { toast } = useToast();
 
-  // Load tag counts for all groups when engine status is available
-  useEffect(() => {
-    if (!engineStatus?.groups) return;
-
-    const loadTagCounts = async () => {
-      const groupIds = engineStatus.groups.map(g => g.group_id);
-
-      for (const group of engineStatus.groups) {
-        // Skip if already loaded
-        if (groupTagCounts[group.group_id] !== undefined) continue;
-
-        try {
-          const checkResult = await pollingApi.preStartCheck(group.group_id);
-          setGroupTagCounts(prev => ({ ...prev, [group.group_id]: checkResult.tag_count }));
-          setGroupPlcStatus(prev => ({ ...prev, [group.group_id]: checkResult.plc_status }));
-        } catch (err) {
-          console.error(`Failed to load tag count for ${group.group_name}:`, err);
-          setGroupPlcStatus(prev => ({ ...prev, [group.group_id]: 'unknown' }));
-        }
-      }
-    };
-
-    loadTagCounts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [engineStatus?.groups?.length]); // Only re-run when group count changes
+  // PLC 상태는 수동 확인 버튼으로만 체크 - 자동 로드 제거
+  // 사용자가 "PLC 확인" 버튼을 눌러야만 상태가 업데이트됨
 
   // Start group
   const handleStartGroup = async (groupName: string) => {
@@ -215,6 +194,63 @@ export default function PollingWebSocketPage() {
       });
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // Check PLC connection status
+  const handleCheckPlcConnection = async (groupId: number, groupName: string) => {
+    setCheckingPlc(prev => ({ ...prev, [groupId]: true }));
+
+    toast({
+      title: "PLC 연결 확인 중...",
+      description: `${groupName} 그룹의 PLC 연결 상태를 확인하고 있습니다.`,
+    });
+
+    try {
+      const checkResult = await pollingApi.preStartCheck(groupId);
+
+      // 상태 업데이트
+      setGroupTagCounts(prev => ({ ...prev, [groupId]: checkResult.tag_count }));
+      setGroupPlcStatus(prev => ({ ...prev, [groupId]: checkResult.plc_status }));
+      setGroupPlcInfo(prev => ({
+        ...prev,
+        [groupId]: {
+          ip: checkResult.plc_ip,
+          port: checkResult.plc_port,
+          name: checkResult.plc_name
+        }
+      }));
+
+      if (checkResult.plc_status === 'connected') {
+        toast({
+          title: "PLC 연결 성공",
+          description: `${groupName}: PLC ${checkResult.plc_ip}:${checkResult.plc_port} 연결됨 (태그 ${checkResult.tag_count}개)`,
+          variant: "default",
+        });
+      } else if (checkResult.plc_status === 'connection_failed') {
+        toast({
+          title: "PLC 연결 실패",
+          description: `${groupName}: ${checkResult.plc_ip}:${checkResult.plc_port} 연결 실패\n${checkResult.error_detail || ''}`,
+          variant: "destructive",
+        });
+      } else if (checkResult.plc_status === 'inactive') {
+        toast({
+          title: "PLC 비활성",
+          description: `${groupName}: PLC가 비활성화되어 있습니다. PLC 연결 설정에서 활성화해주세요.`,
+          variant: "destructive",
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'PLC 연결 확인 실패';
+      setGroupPlcStatus(prev => ({ ...prev, [groupId]: 'unknown' }));
+
+      toast({
+        title: "PLC 연결 확인 오류",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setCheckingPlc(prev => ({ ...prev, [groupId]: false }));
     }
   };
 
@@ -448,8 +484,17 @@ export default function PollingWebSocketPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="text-lg font-semibold text-gray-100">{group.group_name}</h3>
+                      {/* PLC IP:Port 정보 */}
+                      {groupPlcInfo[group.group_id]?.ip && (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                          </svg>
+                          {groupPlcInfo[group.group_id].ip}:{groupPlcInfo[group.group_id].port}
+                        </span>
+                      )}
                       <span className={`px-2 py-1 rounded text-xs font-medium ${getModeBadgeClass(group.mode)}`}>
                         {group.mode}
                       </span>
@@ -459,6 +504,14 @@ export default function PollingWebSocketPage() {
                       {groupTagCounts[group.group_id] !== undefined && (
                         <span className="px-2 py-1 rounded text-xs font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                           태그 {groupTagCounts[group.group_id]}개
+                        </span>
+                      )}
+                      {groupPlcStatus[group.group_id] === 'connected' && (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                          PLC 연결됨
                         </span>
                       )}
                       {groupPlcStatus[group.group_id] === 'connection_failed' && (
@@ -474,12 +527,62 @@ export default function PollingWebSocketPage() {
                           PLC 비활성
                         </span>
                       )}
+                      {groupPlcStatus[group.group_id] === undefined && (
+                        <span className="px-2 py-1 rounded text-xs font-medium bg-gray-500/10 text-gray-400 border border-gray-500/20 flex items-center gap-1">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          PLC 확인 필요
+                        </span>
+                      )}
                     </div>
                     <div className="flex gap-2">
+                      {/* PLC 연결 확인 버튼 - 중지 상태일 때만 표시 */}
+                      {group.state === 'stopped' && (
+                        <button
+                          onClick={() => handleCheckPlcConnection(group.group_id, group.group_name)}
+                          disabled={checkingPlc[group.group_id]}
+                          title="PLC 연결 상태 확인"
+                          className="bg-blue-600 text-white px-4 py-1.5 rounded text-sm font-medium hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          {checkingPlc[group.group_id] ? (
+                            <>
+                              <svg className="w-3 h-3 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              확인 중...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                              </svg>
+                              PLC 확인
+                            </>
+                          )}
+                        </button>
+                      )}
                       {group.state === 'stopped' && (
                         <button
                           onClick={() => handleStartGroup(group.group_name)}
-                          disabled={actionLoading === group.group_name}
+                          disabled={
+                            actionLoading === group.group_name ||
+                            groupPlcStatus[group.group_id] === 'connection_failed' ||
+                            groupPlcStatus[group.group_id] === 'inactive' ||
+                            groupPlcStatus[group.group_id] === undefined ||
+                            groupTagCounts[group.group_id] === 0
+                          }
+                          title={
+                            groupPlcStatus[group.group_id] === undefined
+                              ? 'PLC 연결 상태를 먼저 확인하세요'
+                              : groupPlcStatus[group.group_id] === 'connection_failed'
+                              ? 'PLC 연결 실패 - PLC 확인 버튼을 눌러 재시도하세요'
+                              : groupPlcStatus[group.group_id] === 'inactive'
+                              ? 'PLC가 비활성화되어 있습니다'
+                              : groupTagCounts[group.group_id] === 0
+                              ? '폴링할 태그가 없습니다'
+                              : '폴링 시작'
+                          }
                           className="bg-green-600 text-white px-4 py-1 rounded text-sm hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed flex items-center gap-1"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -77,7 +77,7 @@ export default function LinesPage() {
           <p className="text-gray-400 mt-1">Manage production lines and facilities</p>
         </div>
         <Link href="/lines/new">
-          <Button className="bg-blue-600 hover:bg-blue-700">
+          <Button className="bg-blue-600 hover:bg-blue-700 text-white">
             <Plus className="h-4 w-4 mr-2" />
             New Line
           </Button>

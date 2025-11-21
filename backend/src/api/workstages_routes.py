@@ -6,7 +6,7 @@ Provides CRUD operations for production workstages
 """
 
 from typing import List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from src.database.sqlite_manager import SQLiteManager
 from .models import WorkstageCreate, WorkstageUpdate, WorkstageResponse, PaginatedResponse
 from .dependencies import get_db, PaginationParams, log_crud_operation
@@ -304,7 +304,6 @@ def get_oracle_connection_info():
         config = load_config_from_env()
         return config.to_dict()
     except Exception as e:
-        from fastapi import HTTPException
         from src.config.logging_config import get_logger
 
         logger = get_logger(__name__)
@@ -342,7 +341,6 @@ def sync_workstages_from_oracle(db: SQLiteManager = Depends(get_db)):
     """
     from src.oracle_writer.oracle_helper import get_oracle_workstages
     from src.config.logging_config import get_logger
-    from fastapi import HTTPException
 
     logger = get_logger(__name__)
 

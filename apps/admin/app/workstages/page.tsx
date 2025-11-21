@@ -157,7 +157,7 @@ export default function WorkstagesPage() {
             Oracle에서 동기화
           </Button>
           <Link href="/workstages/new">
-            <Button className="bg-blue-600 hover:bg-blue-700">
+            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
               <Plus className="h-4 w-4 mr-2" />
               새 공정 추가
             </Button>

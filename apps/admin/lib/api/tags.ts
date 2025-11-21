@@ -41,7 +41,7 @@ export const deleteTag = async (id: number) => {
 export const uploadCSV = async (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await apiClient.post<CSVUploadResponse>('/tags/upload', formData, {
+  const response = await apiClient.post<CSVUploadResponse>('/tags/import-csv', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
   return response.data;

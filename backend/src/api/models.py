@@ -296,6 +296,7 @@ class PollingGroupBase(BaseModel):
     trigger_bit_offset: int = 0
     auto_reset_trigger: bool = True
     priority: str = Field(default='NORMAL')
+    description: Optional[str] = Field(None, description="Polling group description")
     enabled: bool = Field(default=True, alias='is_active')  # Accept 'is_active' from frontend
 
     model_config = ConfigDict(populate_by_name=True)  # Allow both alias and field name
@@ -329,6 +330,7 @@ class PollingGroupUpdate(BaseModel):
     interval_ms: Optional[int] = Field(None, alias='polling_interval')  # Accept 'polling_interval' from frontend
     group_category: Optional[str] = Field(None, description="Oracle table category: OPERATION, STATE, or ALARM")
     trigger_bit_address: Optional[str] = None
+    description: Optional[str] = Field(None, description="Polling group description")
     enabled: Optional[bool] = Field(None, alias='is_active')  # Accept 'is_active' from frontend
     tag_ids: Optional[List[int]] = Field(None, description="List of tag IDs to assign to this polling group")
 

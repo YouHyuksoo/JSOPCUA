@@ -197,21 +197,21 @@ TAG_MAPPING = TableMapping(
 )
 
 
-# 4. ICOM_WORKSTAGE_MASTER → processes
-PROCESS_MAPPING = TableMapping(
+# 4. ICOM_WORKSTAGE_MASTER → workstages
+WORKSTAGE_MAPPING = TableMapping(
     oracle_table="ICOM_WORKSTAGE_MASTER",
-    sqlite_table="processes",
+    sqlite_table="workstages",
     key_columns=["WORKSTAGE_CODE"],
     column_mapping={
-        "WORKSTAGE_CODE": "process_code",
-        "WORKSTAGE_NAME": "process_name",
+        "WORKSTAGE_CODE": "workstage_code",
+        "WORKSTAGE_NAME": "workstage_name",
         "WORKSTAGE_DESC": "description",
         "WORKSTAGE_SEQ": "sequence_order",
         "USE_YN": "is_active"
     },
     value_transformers={
-        "process_code": strip_or_none,
-        "process_name": strip_or_none,
+        "workstage_code": strip_or_none,
+        "workstage_name": strip_or_none,
         "description": lambda v: strip_or_none(v) or "",
         "sequence_order": int_or_default(0),
         "is_active": yn_to_bool
@@ -228,7 +228,7 @@ ALL_MAPPINGS = {
     "machines": MACHINE_MAPPING,
     "plc_connections": PLC_MAPPING,
     "tags": TAG_MAPPING,
-    "processes": PROCESS_MAPPING
+    "workstages": WORKSTAGE_MAPPING
 }
 
 

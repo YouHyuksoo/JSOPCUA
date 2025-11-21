@@ -90,7 +90,7 @@ def init_database():
 
     # V2 스키마 테이블 (machines 테이블 제거됨)
     expected_tables = [
-        "processes",
+        "workstages",
         "plc_connections",
         "tags",
         "polling_groups"
@@ -157,18 +157,18 @@ def test_database_operations():
     logger.info("=" * 60)
 
     try:
-        # 테스트 1: 공정 삽입 (V2 - processes 테이블이 독립적)
-        logger.info("Test 1: Insert test process...")
+        # 테스트 1: 공정 삽입 (V2 - workstages 테이블이 독립적)
+        logger.info("Test 1: Insert test workstage...")
         manager.execute_update(
-            "INSERT INTO processes (process_code, process_name) VALUES (?, ?)",
-            ("TEST01", "Test Process")
+            "INSERT INTO workstages (workstage_code, workstage_name) VALUES (?, ?)",
+            ("TEST01", "Test Workstage")
         )
         logger.info("✓ Insert successful")
 
         # 테스트 2: 조회
-        logger.info("Test 2: Query test process...")
+        logger.info("Test 2: Query test workstage...")
         results = manager.execute_query(
-            "SELECT * FROM processes WHERE process_code = ?",
+            "SELECT * FROM workstages WHERE workstage_code = ?",
             ("TEST01",)
         )
         if results:
@@ -177,36 +177,36 @@ def test_database_operations():
             logger.error("✗ Query failed - No results")
 
         # 테스트 3: 삭제 (테스트 데이터 정리)
-        logger.info("Test 3: Delete test process...")
+        logger.info("Test 3: Delete test workstage...")
         manager.execute_update(
-            "DELETE FROM processes WHERE process_code = ?",
+            "DELETE FROM workstages WHERE workstage_code = ?",
             ("TEST01",)
         )
         logger.info("✓ Delete successful")
 
         # 테스트 4: 14자리 설비 코드 테스트 (V2)
-        logger.info("Test 4: Insert 14-digit process code...")
+        logger.info("Test 4: Insert 14-digit workstage code...")
 
         # 14자리 설비 코드로 공정 추가 (V2에서는 line_id 불필요)
         manager.execute_update(
-            "INSERT INTO processes (process_code, process_name, location) VALUES (?, ?, ?)",
-            ("KRCWO12ELOA101", "Test Process", "Test Location")
+            "INSERT INTO workstages (workstage_code, workstage_name, location) VALUES (?, ?, ?)",
+            ("KRCWO12ELOA101", "Test Workstage", "Test Location")
         )
-        logger.info("✓ 14-digit process code inserted successfully")
+        logger.info("✓ 14-digit workstage code inserted successfully")
 
         # 테스트 5: UTF-8 한글 테스트
         logger.info("Test 5: UTF-8 Korean text test...")
-        process_results = manager.execute_query(
-            "SELECT process_name FROM processes WHERE process_code = ?",
+        workstage_results = manager.execute_query(
+            "SELECT workstage_name FROM workstages WHERE workstage_code = ?",
             ("KRCWO12ELOA101",)
         )
-        if process_results:
-            logger.info(f"✓ UTF-8 test successful - Retrieved: {process_results[0]['process_name']}")
+        if workstage_results:
+            logger.info(f"✓ UTF-8 test successful - Retrieved: {workstage_results[0]['workstage_name']}")
         else:
             logger.error("✗ UTF-8 test failed")
 
         # 테스트 데이터 정리
-        manager.execute_update("DELETE FROM processes WHERE process_code = ?", ("KRCWO12ELOA101",))
+        manager.execute_update("DELETE FROM workstages WHERE workstage_code = ?", ("KRCWO12ELOA101",))
 
         logger.info("=" * 60)
         logger.info("✓ All database tests passed!")

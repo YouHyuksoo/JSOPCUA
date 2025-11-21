@@ -40,7 +40,7 @@ class EquipmentListResponse(BaseModel):
 
 class EquipmentPosition(BaseModel):
     """설비 박스 위치 정보"""
-    process_code: str
+    workstage_code: str
     position_x: float = Field(ge=0, description="X 좌표 (픽셀)")
     position_y: float = Field(ge=0, description="Y 좌표 (픽셀)")
     width: Optional[float] = Field(None, ge=0, description="박스 너비 (픽셀)")
@@ -62,7 +62,7 @@ class EquipmentPositionUpdate(BaseModel):
 class EquipmentPositionsResponse(BaseModel):
     """설비 위치 정보 응답"""
     layout_name: str
-    positions: Dict[str, EquipmentPosition] = Field(description="process_code를 키로 하는 위치 정보 딕셔너리")
+    positions: Dict[str, EquipmentPosition] = Field(description="workstage_code를 키로 하는 위치 정보 딕셔너리")
 
 
 def get_oracle_connection():
@@ -248,7 +248,7 @@ async def get_equipment_positions(
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT 
-                    process_code,
+                    workstage_code,
                     position_x,
                     position_y,
                     width,
@@ -260,15 +260,15 @@ async def get_equipment_positions(
                     machine_code
                 FROM equipment_positions
                 WHERE layout_name = ?
-                ORDER BY z_index, process_code
+                ORDER BY z_index, workstage_code
             """, (layout_name,))
             rows = cursor.fetchall()
             
             positions: Dict[str, EquipmentPosition] = {}
             for row in rows:
-                process_code = row[0]
-                positions[process_code] = EquipmentPosition(
-                    process_code=process_code,
+                workstage_code = row[0]
+                positions[workstage_code] = EquipmentPosition(
+                    workstage_code=workstage_code,
                     position_x=row[1],
                     position_y=row[2],
                     width=row[3],
@@ -308,8 +308,8 @@ async def save_equipment_positions(
                 # 먼저 존재 여부 확인
                 cursor.execute("""
                     SELECT id FROM equipment_positions
-                    WHERE process_code = ? AND layout_name = ?
-                """, (pos.process_code, update.layout_name))
+                    WHERE workstage_code = ? AND layout_name = ?
+                """, (pos.workstage_code, update.layout_name))
                 existing = cursor.fetchone()
                 
                 if existing:
@@ -326,7 +326,7 @@ async def save_equipment_positions(
                             plc_code = ?,
                             machine_code = ?,
                             updated_at = CURRENT_TIMESTAMP
-                        WHERE process_code = ? AND layout_name = ?
+                        WHERE workstage_code = ? AND layout_name = ?
                     """, (
                         pos.position_x,
                         pos.position_y,
@@ -337,17 +337,17 @@ async def save_equipment_positions(
                         pos.tag_address,
                         pos.plc_code,
                         pos.machine_code,
-                        pos.process_code,
+                        pos.workstage_code,
                         update.layout_name
                     ))
                 else:
                     # 생성
                     cursor.execute("""
                         INSERT INTO equipment_positions
-                        (process_code, layout_name, position_x, position_y, width, height, z_index, tag_id, tag_address, plc_code, machine_code)
+                        (workstage_code, layout_name, position_x, position_y, width, height, z_index, tag_id, tag_address, plc_code, machine_code)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, (
-                        pos.process_code,
+                        pos.workstage_code,
                         update.layout_name,
                         pos.position_x,
                         pos.position_y,

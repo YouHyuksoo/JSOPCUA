@@ -63,7 +63,7 @@ def create_polling_group(group: PollingGroupCreate, db: SQLiteManager = Depends(
             group.mode,  # polling_mode
             group.interval_ms,  # polling_interval_ms
             group.group_category,  # group_category
-            f"Line: {group.line_code or 'N/A'}, Workstage: {group.workstage_code or 'N/A'}",  # description
+            group.description,  # description
             group.enabled,  # is_active
             group.plc_code
         ))
@@ -255,6 +255,10 @@ def update_polling_group(
     if group_update.group_category is not None:
         updates.append("group_category = ?")
         params.append(group_update.group_category)
+
+    if group_update.description is not None:
+        updates.append("description = ?")
+        params.append(group_update.description)
 
     # trigger_bit_address is not in DB (ignored)
 
@@ -668,6 +672,7 @@ def _row_to_polling_group_response(row) -> PollingGroupResponse:
         trigger_bit_offset=row[7] if row[7] is not None else 0,  # Default to 0 if None
         auto_reset_trigger=bool(row[8]),
         priority=row[9],
+        description=row[10],  # description
         enabled=bool(row[11]),  # is_active
         created_at=row[12],
         updated_at=row[13],
