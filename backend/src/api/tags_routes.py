@@ -192,6 +192,31 @@ def get_tag_categories(db: SQLiteManager = Depends(get_db)):
 
 
 # ==============================================================================
+# GET /api/tags/machine-codes - Get distinct machine codes
+# ==============================================================================
+
+@router.get("/machine-codes")
+def get_machine_codes(db: SQLiteManager = Depends(get_db)):
+    """
+    Get list of distinct machine codes from database
+
+    Returns list of unique machine_code values for filter dropdown
+    """
+    with db.get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DISTINCT machine_code
+            FROM tags
+            WHERE machine_code IS NOT NULL AND machine_code != ''
+            ORDER BY machine_code
+        """)
+        rows = cursor.fetchall()
+
+    machine_codes = [row[0] for row in rows]
+    return {"machine_codes": machine_codes}
+
+
+# ==============================================================================
 # Oracle Synchronization APIs (MUST be before /{tag_id} route)
 # ==============================================================================
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getTags, deleteTag, syncTagsFromOracle, getOracleConnectionInfo, getTagCategories } from '@/lib/api/tags';
+import { getTags, deleteTag, syncTagsFromOracle, getOracleConnectionInfo, getTagCategories, getMachineCodes } from '@/lib/api/tags';
 import { Tag } from '@/lib/types/tag';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -36,8 +36,10 @@ export default function TagsPage() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [selectedMachineCode, setSelectedMachineCode] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [categories, setCategories] = useState<string[]>([]);
+  const [machineCodes, setMachineCodes] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
@@ -52,12 +54,22 @@ export default function TagsPage() {
     }
   };
 
+  const fetchMachineCodes = async () => {
+    try {
+      const data = await getMachineCodes();
+      setMachineCodes(data.machine_codes);
+    } catch (error) {
+      console.error('Failed to fetch machine codes:', error);
+    }
+  };
+
   const fetchTags = async (page = 1) => {
     setLoading(true);
     try {
       const validPage = Math.max(1, Number(page) || 1);
       const category = selectedCategory !== 'all' ? selectedCategory : undefined;
-      const data = await getTags(validPage, itemsPerPage, category);
+      const machineCode = selectedMachineCode !== 'all' ? selectedMachineCode : undefined;
+      const data = await getTags(validPage, itemsPerPage, category, machineCode);
       setTags(data.items);
       setTotalPages(data.total_pages || 1);
       setTotalItems(data.total_count || 0);
@@ -71,11 +83,12 @@ export default function TagsPage() {
 
   useEffect(() => {
     fetchCategories();
+    fetchMachineCodes();
   }, []);
 
   useEffect(() => {
     fetchTags(currentPage);
-  }, [currentPage, selectedCategory]);
+  }, [currentPage, selectedCategory, selectedMachineCode]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -214,7 +227,7 @@ export default function TagsPage() {
               <div className="flex items-center gap-2">
                 <Filter className="h-4 w-4 text-gray-400" />
                 <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-48 bg-gray-800 border-gray-700 text-white">
+                  <SelectTrigger className="w-36 bg-gray-800 border-gray-700 text-white">
                     <SelectValue placeholder="태그 타입" />
                   </SelectTrigger>
                   <SelectContent className="bg-gray-800 border-gray-700">
@@ -233,6 +246,26 @@ export default function TagsPage() {
                   </SelectContent>
                 </Select>
               </div>
+              {/* Machine Code Filter */}
+              <Select value={selectedMachineCode} onValueChange={setSelectedMachineCode}>
+                <SelectTrigger className="w-40 bg-gray-800 border-gray-700 text-white">
+                  <SelectValue placeholder="설비코드" />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-800 border-gray-700 max-h-60">
+                  <SelectItem value="all" className="text-white hover:bg-gray-700">
+                    전체 설비
+                  </SelectItem>
+                  {machineCodes.map((code) => (
+                    <SelectItem
+                      key={code}
+                      value={code}
+                      className="text-white hover:bg-gray-700"
+                    >
+                      {code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {/* Status Filter */}
               <div className="flex items-center gap-2">
                 <Select value={statusFilter} onValueChange={setStatusFilter}>

@@ -23,7 +23,7 @@ export default function EditPollingGroupPage({ params }: { params: { id: string 
       try {
         const [groupData, allTagsData, groupTagsData] = await Promise.all([
           getPollingGroup(id),
-          getTags(1, 10000, undefined, true), // is_active=true인 태그만
+          getTags(1, 10000, undefined, undefined, true), // is_active=true인 태그만
           getPollingGroupTags(id)
         ]);
         console.log('Polling Group Data:', groupData);

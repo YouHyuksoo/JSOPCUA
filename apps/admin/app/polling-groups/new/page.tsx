@@ -20,7 +20,7 @@ export default function NewPollingGroupPage() {
 
   useEffect(() => {
     // is_active=true인 태그만 가져오기 (limit=10000)
-    getTags(1, 10000, undefined, true).then((data) => {
+    getTags(1, 10000, undefined, undefined, true).then((data) => {
       setTags(data.items);
       setLoading(false);
     });
