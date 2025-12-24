@@ -25,11 +25,10 @@ ENV/
 env/
 backend/.venv/
 
-# SQLite & Data
-backend/data/
-*.db
+# SQLite & Data (scada.db is tracked)
 *.sqlite
 *.sqlite3
+*_backup_*.db
 
 # Logs
 backend/logs/
