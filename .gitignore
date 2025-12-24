@@ -34,8 +34,7 @@ backend/.venv/
 backend/logs/
 *.log
 
-# Environment
-.env
+# Environment (backend/.env is tracked for deployment)
 .env.local
 
 # IDE
