@@ -20,8 +20,8 @@ class Line:
 
 
 @dataclass
-class Process:
-    """공정 (processes 테이블)
+class Workstage:
+    """공정 (workstages 테이블)
 
     14자리 설비 코드 예시: KRCWO12ELOA101
     - KR: 국가 코드
@@ -32,9 +32,9 @@ class Process:
     - 101: 순번
     """
     id: Optional[int] = None
-    line_id: int = 0
-    process_code: str = ""  # 14자리 설비 코드
-    process_name: str = ""
+    machine_code: Optional[str] = None  # machines.machine_code 참조
+    workstage_code: str = ""  # 14자리 설비 코드
+    workstage_name: str = ""
     description: Optional[str] = None
     sequence_order: int = 0
     is_active: bool = True
@@ -54,6 +54,31 @@ class PLCConnection:
     protocol: str = "MC_3E_ASCII"
     connection_timeout: int = 5
     is_active: bool = True
+    # MELSEC 설정
+    driver_version: Optional[str] = "V2"
+    message_format: Optional[str] = "Binary"
+    series: Optional[str] = "Q Series"
+    # SSL/TLS 설정
+    ssl_root_cert: Optional[str] = None
+    ssl_version: Optional[str] = "None"
+    ssl_password: Optional[str] = None
+    ssl_private_key: Optional[str] = None
+    ssl_certificate: Optional[str] = None
+    # 네트워크 설정
+    local_address: Optional[str] = None
+    network_type: Optional[str] = "tcp"
+    # 소켓 설정
+    keep_alive: Optional[bool] = False
+    linger_time: Optional[int] = -1
+    # 일반 설정
+    description: Optional[str] = None
+    scan_time: Optional[int] = 1000
+    # 장치 설정
+    charset: Optional[str] = "UTF8"
+    text_endian: Optional[str] = "None"
+    # 장치 블락 설정
+    unit_size: Optional[str] = "16Bit"
+    block_size: Optional[int] = 64
     last_connected_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -66,9 +91,15 @@ class PollingGroup:
     polling_mode:
     - FIXED: 고정 주기 폴링
     - HANDSHAKE: 핸드셰이크 모드
+
+    group_category (동작구분):
+    - ALARM: 알람/상태 태그 (XSCADA_DATATAG_LOG에 저장, 변경 감지 기반)
+    - OPERATION: 동작 태그 (XSCADA_OPERATION에 저장, 변경 감지 기반)
+    - STATE: 상태 태그 (XSCADA_DATATAG_LOG에 저장, 변경 감지 기반)
     """
     id: Optional[int] = None
     group_name: str = ""
+    group_category: str = "OPERATION"  # ALARM, OPERATION, STATE
     polling_mode: str = "FIXED"  # FIXED or HANDSHAKE
     polling_interval_ms: int = 1000
     description: Optional[str] = None

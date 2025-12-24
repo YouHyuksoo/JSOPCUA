@@ -1,0 +1,251 @@
+openapi: 3.0.3
+info:
+  title: Buffer and Oracle Writer Monitoring API
+  description: REST API for monitoring buffer status and Oracle writer metrics
+  version: 1.0.0
+  contact:
+    name: JSScada Team
+
+servers:
+  - url: http://localhost:8000/api
+    description: Local development server
+
+paths:
+  /buffer/status:
+    get:
+      summary: Get buffer status
+      description: Returns current buffer size, utilization, and overflow metrics
+      operationId: getBufferStatus
+      tags:
+        - Buffer Monitoring
+      responses:
+        '200':
+          description: Buffer status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BufferStatus'
+              example:
+                current_size: 1250
+                max_size: 10000
+                utilization_pct: 12.5
+                total_inserted: 125430
+                total_removed: 124180
+                overflow_count: 0
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /buffer/writer/metrics:
+    get:
+      summary: Get Oracle writer metrics
+      description: Returns write success/failure counts and performance metrics
+      operationId: getWriterMetrics
+      tags:
+        - Writer Monitoring
+      responses:
+        '200':
+          description: Writer metrics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WriterMetrics'
+              example:
+                successful_writes: 2486
+                failed_writes: 2
+                success_rate_pct: 99.92
+                last_write_timestamp: "2025-11-02T14:30:45.123456"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /buffer/health:
+    get:
+      summary: Get overall buffer and writer health
+      description: Returns combined status of buffer and writer for health checks
+      operationId: getBufferHealth
+      tags:
+        - Health Check
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: healthy
+                buffer_ok: true
+                writer_ok: true
+                oracle_connection_ok: true
+                details:
+                  buffer_utilization_pct: 12.5
+                  recent_write_success: true
+                  last_write_age_seconds: 0.5
+        '503':
+          description: System is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+              example:
+                status: unhealthy
+                buffer_ok: true
+                writer_ok: false
+                oracle_connection_ok: false
+                details:
+                  buffer_utilization_pct: 85.2
+                  recent_write_success: false
+                  last_write_age_seconds: 120
+
+components:
+  schemas:
+    BufferStatus:
+      type: object
+      required:
+        - current_size
+        - max_size
+        - utilization_pct
+        - total_inserted
+        - total_removed
+        - overflow_count
+      properties:
+        current_size:
+          type: integer
+          description: Current number of items in buffer
+          example: 1250
+          minimum: 0
+        max_size:
+          type: integer
+          description: Maximum buffer capacity
+          example: 10000
+          minimum: 1
+        utilization_pct:
+          type: number
+          format: float
+          description: Buffer utilization percentage (0-100)
+          example: 12.5
+          minimum: 0
+          maximum: 100
+        total_inserted:
+          type: integer
+          description: Total items inserted to buffer since startup
+          example: 125430
+          minimum: 0
+        total_removed:
+          type: integer
+          description: Total items removed from buffer (written to Oracle)
+          example: 124180
+          minimum: 0
+        overflow_count:
+          type: integer
+          description: Total items discarded due to buffer overflow
+          example: 0
+          minimum: 0
+
+    WriterMetrics:
+      type: object
+      required:
+        - successful_writes
+        - failed_writes
+        - success_rate_pct
+      properties:
+        successful_writes:
+          type: integer
+          description: Number of successful batch writes to Oracle
+          example: 2486
+          minimum: 0
+        failed_writes:
+          type: integer
+          description: Number of failed batch writes (after all retries)
+          example: 2
+          minimum: 0
+        success_rate_pct:
+          type: number
+          format: float
+          description: Write success rate percentage
+          example: 99.92
+          minimum: 0
+          maximum: 100
+        last_write_timestamp:
+          type: string
+          format: date-time
+          description: Timestamp of last successful write (ISO 8601)
+          example: "2025-11-02T14:30:45.123456"
+          nullable: true
+
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - buffer_ok
+        - writer_ok
+        - oracle_connection_ok
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, degraded]
+          description: Overall system health status
+          example: healthy
+        buffer_ok:
+          type: boolean
+          description: Buffer is operating normally (utilization < 80%)
+          example: true
+        writer_ok:
+          type: boolean
+          description: Writer is operating normally (recent writes successful)
+          example: true
+        oracle_connection_ok:
+          type: boolean
+          description: Oracle database connection is available
+          example: true
+        details:
+          type: object
+          description: Additional health check details
+          properties:
+            buffer_utilization_pct:
+              type: number
+              format: float
+              example: 12.5
+            recent_write_success:
+              type: boolean
+              example: true
+            last_write_age_seconds:
+              type: number
+              format: float
+              description: Seconds since last successful write
+              example: 0.5
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error code or type
+          example: INTERNAL_SERVER_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          example: Failed to retrieve buffer status
+        details:
+          type: string
+          description: Additional error details
+          example: "DatabaseError: Connection pool exhausted"
+          nullable: true
+
+tags:
+  - name: Buffer Monitoring
+    description: Endpoints for monitoring circular buffer status
+  - name: Writer Monitoring
+    description: Endpoints for monitoring Oracle writer performance
+  - name: Health Check
+    description: Endpoints for system health checks

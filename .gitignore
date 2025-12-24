@@ -10,8 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+backend/lib/
+backend/lib64/
 parts/
 sdist/
 var/
@@ -23,14 +23,16 @@ venv/
 .venv/
 ENV/
 env/
+backend/.venv/
 
-# SQLite
+# SQLite & Data
+backend/data/
 *.db
 *.sqlite
 *.sqlite3
 
 # Logs
-logs/
+backend/logs/
 *.log
 
 # Environment
@@ -70,3 +72,17 @@ nul
 # Backup files
 *.bak
 *_backup_*.db
+
+.claude/commands/
+.claude/commands/
+.claude/commands/
+nul
+start-backend.bat
+.claude/settings.local.json
+그림1.png
+익스포트.sql
+CLAUDE.md
+익스포트.sql
+ehm도면.pdf
+kill-port-8000.bat
+kill-ports.bat

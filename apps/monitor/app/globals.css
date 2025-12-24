@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #000000;
+    color: #ffffff;
+    height: 100%;
+  }
+
+  body {
+    background-color: #000000;
+    color: #ffffff;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #__next {
+    height: 100%;
+    background-color: #000000;
+  }
+}

@@ -1,10 +1,18 @@
 @echo off
 REM ============================================
-REM JSOPCUA Backend Startup Script
+REM @file start-backend.bat
+REM @description
+REM JSOPCUA Backend 간편 실행 스크립트
+REM
+REM 이 스크립트는 Python 가상환경을 활성화하고
+REM FastAPI 백엔드 서버를 실행합니다.
+REM
+REM 초보자 가이드:
+REM 1. 가상환경이 없으면 먼저 dev-menu.bat에서 6, 7번 실행
+REM 2. 이 파일을 더블클릭하면 백엔드 서버 시작
 REM ============================================
-REM This script activates the virtual environment
-REM and starts the FastAPI backend server
-REM ============================================
+
+chcp 65001 > nul
 
 echo.
 echo ========================================
@@ -17,74 +25,46 @@ cd /d "%~dp0backend"
 
 REM Check if virtual environment exists
 if not exist ".venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual environment not found at backend\.venv
-    echo Please create it first with: python -m venv .venv
-    echo Then install dependencies: pip install -r requirements.txt
+    echo [오류] 가상환경이 없습니다: backend\.venv
+    echo.
+    echo 먼저 다음 명령어로 가상환경을 생성하세요:
+    echo   python -m venv .venv
+    echo   .venv\Scripts\activate
+    echo   pip install -r requirements.txt
+    echo.
+    echo 또는 dev-menu.bat에서 6, 7번을 실행하세요.
     pause
     exit /b 1
 )
 
 REM Activate virtual environment
-echo [1/3] Activating virtual environment...
+echo [1/2] 가상환경 활성화 중...
 call .venv\Scripts\activate.bat
-
-REM Check if activation was successful
-if errorlevel 1 (
-    echo [ERROR] Failed to activate virtual environment
-    pause
-    exit /b 1
-)
-
-echo [OK] Virtual environment activated
+echo [완료] 가상환경 활성화됨
 echo.
 
-REM Check if .env file exists
-if not exist ".env" (
-    echo [WARNING] .env file not found
-    echo Copying from .env.example...
-    copy .env.example .env
-    echo [INFO] Please edit backend\.env with your configuration
+REM Check if api/main.py exists
+if not exist "src\api\main.py" (
+    echo [오류] src\api\main.py 파일이 없습니다.
     echo.
-)
-
-REM Check for essential environment variables in .env
-findstr /C:"ORACLE_USERNAME=" ".env" > nul
-if errorlevel 1 (
-    echo [ERROR] Essential environment variable ORACLE_USERNAME is not set in .env
+    echo API 모듈이 아직 구현되지 않았습니다.
+    echo 개발 브랜치를 확인하거나 API를 먼저 생성하세요.
     pause
     exit /b 1
-)
-
-REM Check if database exists
-if not exist "config\scada.db" (
-    echo [WARNING] Database not found at config\scada.db
-    echo [INFO] You may need to run: python src/scripts/init_database.py
-    echo.
 )
 
 REM Start FastAPI server
-echo [2/3] Starting FastAPI server...
+echo [2/2] FastAPI 서버 시작 중...
 echo.
 echo ========================================
-echo  Server starting on http://localhost:8000
-echo  API Docs: http://localhost:8000/docs
-echo  Press Ctrl+C to stop the server
+echo  서버 주소: http://localhost:8000
+echo  API 문서:  http://localhost:8000/docs
+echo  종료하려면 Ctrl+C를 누르세요
 echo ========================================
 echo.
 
-REM Start uvicorn in development mode with auto-reload
-uvicorn src.api.main:app --reload
+uvicorn src.api.main:app --reload --host 0.0.0.0 --port 8000
 
-REM If python command fails, show error
-if errorlevel 1 (
-    echo.
-    echo [ERROR] Failed to start backend server
-    echo Check the error messages above
-    pause
-    exit /b 1
-)
-
-REM This line runs when server is stopped
 echo.
-echo [3/3] Server stopped
+echo [종료] 서버가 중지되었습니다.
 pause

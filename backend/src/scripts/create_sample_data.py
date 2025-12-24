@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def create_sample_data():
     """샘플 데이터 생성"""
 
-    db_path = project_root / "config" / "scada.db"
+    db_path = project_root / "data" / "scada.db"
 
     if not db_path.exists():
         logger.error(f"Database not found: {db_path}")
@@ -205,7 +205,7 @@ if __name__ == "__main__":
     if success:
         logger.info("\n✓ Sample data is ready to use!")
         logger.info("\nYou can now query the database:")
-        logger.info("  sqlite3 config/scada.db")
+        logger.info("  sqlite3 data/scada.db")
         logger.info("  SELECT * FROM v_tags_with_plc;")
     else:
         logger.error("\n✗ Sample data creation failed!")

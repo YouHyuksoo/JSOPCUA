@@ -4,12 +4,30 @@
 # Database
 # SQLite는 Python 표준 라이브러리에 포함되어 있음
 
-# PLC Communication (향후 Feature 2에서 사용)
-# pymcprotocol>=1.0.0
+# PLC Communication
+pymcprotocol>=0.3.0
+concurrent-log-handler>=0.9.24
 
 # Testing
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
+# Web Framework & API
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+websockets>=12.0
+
+# Oracle Database (for storing polling results to remote Oracle server)
+# Note: Use 'oracledb' package (not 'python-oracledb') for Python 3.12+
+oracledb>=2.0.0
+
 # Development
 python-dotenv>=1.0.0
+
+# System Monitoring (Feature 6 - Admin Dashboard)
+psutil>=5.9.0  # For CPU, memory, disk usage monitoring
+
+# Data Processing (Feature 5 - CSV import)
+python-multipart>=0.0.6  # For file uploads
+pandas>=2.1.0  # For CSV parsing
