@@ -27,6 +27,8 @@ export interface CreatePollingGroupRequest {
   plc_code: string;
   workstage_code?: string;
   polling_interval: number;
+  /** 동작구분: OPERATION(동작), STATE(상태), ALARM(알람) */
+  group_category?: string;
   description?: string;
   is_active: boolean;
   tag_ids: number[];

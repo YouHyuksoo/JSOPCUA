@@ -49,6 +49,7 @@ export default function NewPollingGroupPage() {
         name: data.name,
         plc_code: plc_code,
         polling_interval: data.polling_interval_ms,
+        group_category: data.group_category,
         is_active: true,
         tag_ids: data.tag_ids,
       });

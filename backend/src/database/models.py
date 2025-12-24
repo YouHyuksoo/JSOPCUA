@@ -91,9 +91,15 @@ class PollingGroup:
     polling_mode:
     - FIXED: 고정 주기 폴링
     - HANDSHAKE: 핸드셰이크 모드
+
+    group_category (동작구분):
+    - ALARM: 알람/상태 태그 (XSCADA_DATATAG_LOG에 저장, 변경 감지 기반)
+    - OPERATION: 동작 태그 (XSCADA_OPERATION에 저장, 변경 감지 기반)
+    - STATE: 상태 태그 (XSCADA_DATATAG_LOG에 저장, 변경 감지 기반)
     """
     id: Optional[int] = None
     group_name: str = ""
+    group_category: str = "OPERATION"  # ALARM, OPERATION, STATE
     polling_mode: str = "FIXED"  # FIXED or HANDSHAKE
     polling_interval_ms: int = 1000
     description: Optional[str] = None

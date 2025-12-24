@@ -70,14 +70,14 @@ class PollingEngine:
             if group.is_active:
                 # Create thread instance based on polling mode
                 if group.mode == PollingMode.FIXED:
-                    thread = FixedPollingThread(group, self.pool_manager, self.data_queue)
+                    thread = FixedPollingThread(group, self.pool_manager, self.data_queue, db_path=str(self.db_path))
                     self.polling_threads[group.group_name] = thread
                     logger.info(
                         f"Created FIXED polling thread: {group.group_name} "
                         f"(interval={group.interval_ms}ms, tags={len(group.tag_addresses)})"
                     )
                 elif group.mode == PollingMode.HANDSHAKE:
-                    thread = HandshakePollingThread(group, self.pool_manager, self.data_queue)
+                    thread = HandshakePollingThread(group, self.pool_manager, self.data_queue, db_path=str(self.db_path))
                     self.polling_threads[group.group_name] = thread
                     logger.info(
                         f"Created HANDSHAKE polling thread: {group.group_name} "

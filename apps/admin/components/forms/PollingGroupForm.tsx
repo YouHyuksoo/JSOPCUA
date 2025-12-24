@@ -42,9 +42,11 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
       name: defaultValues.name,
       description: defaultValues.description || '',
       polling_interval_ms: defaultValues.polling_interval,
+      group_category: defaultValues.group_category || 'OPERATION',
       tag_ids: initialTagIds,
     } : {
       polling_interval_ms: 1000,
+      group_category: 'OPERATION',
       tag_ids: [],
     },
   });
@@ -198,6 +200,26 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
                   />
                   {errors.polling_interval_ms && (
                     <p className="text-xs text-red-400 mt-1">{errors.polling_interval_ms.message}</p>
+                  )}
+                </div>
+
+                {/* 동작구분 (group_category) */}
+                <div>
+                  <Label htmlFor="group_category" className="text-gray-300 text-sm">동작구분</Label>
+                  <select
+                    id="group_category"
+                    {...register('group_category')}
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm mt-1.5 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="OPERATION">OPERATION (동작)</option>
+                    <option value="STATE">STATE (상태)</option>
+                    <option value="ALARM">ALARM (알람)</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    선택한 동작구분에 따라 데이터가 저장되는 Oracle 테이블이 결정됩니다
+                  </p>
+                  {errors.group_category && (
+                    <p className="text-xs text-red-400 mt-1">{errors.group_category.message}</p>
                   )}
                 </div>
               </div>

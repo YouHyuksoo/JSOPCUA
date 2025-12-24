@@ -15,6 +15,7 @@ from src.database.sqlite_manager import SQLiteManager
 from src.plc.pool_manager import PoolManager
 from .polling_engine import PollingEngine
 from .oracle_writer_thread import OracleWriterThread
+from .tag_value_cache import TagValueCache
 from .exceptions import (
     PollingGroupNotFoundError,
     PollingGroupAlreadyRunningError,
@@ -69,6 +70,10 @@ class PollingGroupManager:
         """
         Initialize polling group manager
 
+        변경된 점:
+        - TagValueCache 인스턴스 생성 및 DB에서 로드
+        - 메모리 기반 변경 감지 시스템 준비
+
         Args:
             db_path: Path to SQLite database
             pool_manager: PoolManager instance
@@ -82,17 +87,28 @@ class PollingGroupManager:
         self.polling_engine: Optional[PollingEngine] = None
         self.oracle_writer: Optional[OracleWriterThread] = None
         self._db = SQLiteManager(str(self.db_path))
+
+        # ✅ TagValueCache 생성 (메모리 기반 변경 감지용)
+        self.tag_value_cache = TagValueCache()
+        # 시작 시 SQLite에서 모든 활성 태그의 last_value 로드
+        loaded_count = self.tag_value_cache.load_from_db(self._db)
+        logger.info(f"TagValueCache loaded with {loaded_count} tag values")
+
         self._initialized = True
 
-        logger.info(f"PollingGroupManager initialized: db={db_path}")
+        logger.info(f"PollingGroupManager initialized: db={db_path}, cache_size={self.tag_value_cache.size()}")
 
     def initialize(self, enable_oracle: bool = True):
         """
         Initialize polling engine and load groups from database
 
         Creates PollingEngine instance and loads all active polling groups.
-        Also starts Oracle writer thread for data persistence.
+        Also starts Oracle writer thread with TagValueCache for fast change detection.
         Does not start any groups automatically.
+
+        변경된 점:
+        - OracleWriterThread 생성 시 tag_value_cache 주입 (메모리 기반 변경 감지)
+        - 성능: 매 폴링마다 DB 조회 없음 (O(1) 메모리 캐시 사용)
 
         Args:
             enable_oracle: Enable Oracle writing (default: True)
@@ -114,17 +130,18 @@ class PollingGroupManager:
 
         logger.info("PollingEngine initialized successfully")
 
-        # Start Oracle writer thread
-        logger.info("Starting Oracle writer thread...")
+        # Start Oracle writer thread with TagValueCache
+        logger.info("Starting Oracle writer thread with TagValueCache...")
         self.oracle_writer = OracleWriterThread(
             data_queue=self.polling_engine.data_queue,
             db_path=str(self.db_path),
+            tag_value_cache=self.tag_value_cache,  # ✅ 캐시 주입
             batch_size=10,
             batch_timeout=5.0,
             enable_oracle=enable_oracle
         )
         self.oracle_writer.start()
-        logger.info("Oracle writer thread started")
+        logger.info(f"Oracle writer thread started with cache size: {self.tag_value_cache.size()} tags")
 
     def start_group(self, group_id: int) -> Dict[str, any]:
         """

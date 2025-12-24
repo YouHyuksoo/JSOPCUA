@@ -4,6 +4,10 @@ export const pollingGroupSchema = z.object({
   name: z.string().min(1, '폴링 그룹 이름은 필수입니다').max(100, '폴링 그룹 이름은 100자 이하여야 합니다'),
   description: z.string().optional(),
   polling_interval_ms: z.number().int().min(100, '폴링 주기는 100ms 이상이어야 합니다').max(60000, '폴링 주기는 60000ms 이하여야 합니다'),
+  /** 동작구분: ALARM(알람/상태), OPERATION(동작), STATE(상태) */
+  group_category: z.enum(['ALARM', 'OPERATION', 'STATE'], {
+    errorMap: () => ({ message: '동작구분은 ALARM, OPERATION, STATE 중 하나여야 합니다' })
+  }).default('OPERATION'),
   tag_ids: z.array(z.number().int().positive()).min(1, '최소 1개 이상의 태그를 선택해야 합니다'),
 });
 

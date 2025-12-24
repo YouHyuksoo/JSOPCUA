@@ -243,6 +243,8 @@ class MC3EClient:
         여러 태그를 한 번에 읽어서 통신 횟수를 줄입니다.
         연속된 주소는 자동으로 그룹화하여 최적화합니다.
 
+        W327C.6 형식의 비트 주소도 지원합니다.
+
         Args:
             tag_addresses: 태그 주소 리스트
 
@@ -277,20 +279,33 @@ class MC3EClient:
             for device_type, group_list in groups.items():
                 for start_addr, count, tags in group_list:
                     try:
-                        # 연속 태그 - batchread_wordunits 사용
-                        head_device = format_device_address(device_type, start_addr)
-                        values = self._plc.batchread_wordunits(headdevice=head_device, readsize=count)
+                        # W327C.6 형식 여부 확인
+                        is_bit_address = any('.' in tag for tag in tags)
 
-                        # 결과 매핑
-                        if isinstance(values, list):
-                            for i, tag in enumerate(tags):
-                                if i < len(values):
-                                    results[tag] = values[i]
-                                else:
-                                    errors[tag] = "Index out of range"
+                        if is_bit_address:
+                            # 비트 주소 읽기
+                            for tag in tags:
+                                try:
+                                    value = self._read_bit_address(tag)
+                                    results[tag] = value
+                                except Exception as e2:
+                                    errors[tag] = str(e2)
+                                    logger.error(f"[{self.plc_code}] Failed to read bit tag {tag}: {e2}")
                         else:
-                            # 단일 값 반환된 경우
-                            results[tags[0]] = values
+                            # 연속 워드 태그 - batchread_wordunits 사용
+                            head_device = format_device_address(device_type, start_addr)
+                            values = self._plc.batchread_wordunits(headdevice=head_device, readsize=count)
+
+                            # 결과 매핑
+                            if isinstance(values, list):
+                                for i, tag in enumerate(tags):
+                                    if i < len(values):
+                                        results[tag] = values[i]
+                                    else:
+                                        errors[tag] = "Index out of range"
+                            else:
+                                # 단일 값 반환된 경우
+                                results[tags[0]] = values
 
                     except Exception as e:
                         # 개별 그룹 에러 - 개별 읽기로 폴백
@@ -298,9 +313,14 @@ class MC3EClient:
 
                         for tag in tags:
                             try:
-                                # 단일 태그도 batchread_wordunits 사용
-                                value = self._plc.batchread_wordunits(headdevice=tag, readsize=1)
-                                results[tag] = value[0] if isinstance(value, list) and len(value) > 0 else value
+                                # W327C.6 형식 여부 확인
+                                if '.' in tag:
+                                    value = self._read_bit_address(tag)
+                                else:
+                                    # 단일 워드 태그
+                                    value = self._plc.batchread_wordunits(headdevice=tag, readsize=1)
+                                    value = value[0] if isinstance(value, list) and len(value) > 0 else value
+                                results[tag] = value
                             except Exception as e2:
                                 errors[tag] = str(e2)
                                 logger.error(f"[{self.plc_code}] Failed to read tag {tag}: {e2}")
@@ -328,6 +348,66 @@ class MC3EClient:
             if error_code:
                 raise PLCProtocolError(error_msg, error_code, self.plc_code) from e
 
+            raise PLCReadError(error_msg, self.plc_code) from e
+
+    def _read_bit_address(self, tag_address: str) -> int:
+        """
+        비트 주소 읽기 (W327C.6, W327C.A ~ W327C.Z 형식)
+
+        W327C.6 또는 W327C.A 형식의 태그는 워드 단위로 읽은 후 특정 비트를 추출합니다.
+
+        Args:
+            tag_address: 비트 주소 (예: "W327C.6", "W327C.A")
+
+        Returns:
+            비트 값 (0 또는 1)
+
+        Raises:
+            PLCReadError: 읽기 실패
+
+        Examples:
+            >>> self._read_bit_address("W327C.6")
+            1  # 또는 0
+            >>> self._read_bit_address("W327C.A")
+            1  # 또는 0
+        """
+        try:
+            # 비트 주소에서 워드 주소 추출
+            # W327C.6 → W327 (워드 읽고) → C 비트 추출 → .6 비트 오프셋 추출
+            # W327C.A → W327 (워드 읽고) → C 비트 추출 → .A 비트 오프셋 추출
+            parts = tag_address.upper().split('.')
+            if len(parts) == 2:
+                word_addr = parts[0]  # W327C
+                bit_offset_str = parts[1]  # 6 또는 A
+
+                # 비트 오프셋이 숫자면 정수로, 문자면 문자 코드로 변환
+                if bit_offset_str.isdigit():
+                    bit_offset = int(bit_offset_str)
+                else:
+                    # A=10, B=11, ..., Z=35 로 변환
+                    bit_offset = ord(bit_offset_str) - ord('A') + 10
+            else:
+                # 비트 오프셋 없음 (W327C.0으로 가정)
+                word_addr = tag_address.upper()
+                bit_offset = 0
+
+            # 워드 단위로 읽기 (pymcprotocol은 워드 단위만 지원)
+            logger.debug(f"[{self.plc_code}] Reading bit address: {tag_address} (word_addr={word_addr}, bit_offset={bit_offset})")
+
+            word_value = self._plc.batchread_wordunits(headdevice=word_addr, readsize=1)
+            word_value = word_value[0] if isinstance(word_value, list) and len(word_value) > 0 else word_value
+
+            # 워드 값에서 특정 비트 추출
+            # bit_offset만큼 오른쪽 시프트 후 최하위 비트 추출
+            bit_value = (word_value >> bit_offset) & 1
+
+            logger.debug(f"[{self.plc_code}] Bit read successful: {tag_address} = {bit_value} (word={word_value:04x}, offset={bit_offset})")
+
+            return bit_value
+
+        except Exception as e:
+            error_msg = f"Failed to read bit address {tag_address}: {str(e)}"
+            logger.error(f"[{self.plc_code}] {error_msg}")
             raise PLCReadError(error_msg, self.plc_code) from e
 
     def _parse_error_code(self, error_message: str) -> Optional[str]:

@@ -77,6 +77,8 @@ class PollingData:
         mode: Polling mode used
         group_category: Oracle table category (OPERATION or ALARM)
         tag_values: Dict of tag address → value
+        tag_log_modes: Dict of tag address → log_mode (ALWAYS/ON_CHANGE/NEVER)
+        tag_machine_codes: Dict of tag address → machine_code (설비코드)
         poll_time_ms: Time taken to complete poll (milliseconds)
         error_tags: Dict of tag address → error message (if any)
     """
@@ -87,6 +89,8 @@ class PollingData:
     mode: PollingMode
     group_category: str = "OPERATION"
     tag_values: Dict[str, Any] = field(default_factory=dict)
+    tag_log_modes: Dict[str, str] = field(default_factory=dict)
+    tag_machine_codes: Dict[str, str] = field(default_factory=dict)
     poll_time_ms: float = 0.0
     error_tags: Dict[str, str] = field(default_factory=dict)
 

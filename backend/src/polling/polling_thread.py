@@ -10,10 +10,12 @@ import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Optional, Dict, Any
+from pathlib import Path
 from .models import PollingGroup, PollingData, ThreadState, PollingMode
 from .data_queue import DataQueue
 from .exceptions import PollingThreadError
 from .polling_logger import get_failure_logger
+from src.database.sqlite_manager import SQLiteManager
 
 logger = logging.getLogger(__name__)
 failure_logger = get_failure_logger()
@@ -40,7 +42,7 @@ class PollingThread(ABC):
         avg_poll_time_ms: Running average of poll times
     """
 
-    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue):
+    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue, db_path: str = None):
         """
         Initialize polling thread
 
@@ -48,10 +50,15 @@ class PollingThread(ABC):
             group: PollingGroup configuration
             pool_manager: PoolManager instance from Feature 2
             data_queue: DataQueue for storing polling results
+            db_path: Path to SQLite database for loading tag metadata (log_mode, machine_code)
         """
         self.group = group
         self.pool_manager = pool_manager
         self.data_queue = data_queue
+        self._db_path = db_path
+        self._db: Optional[SQLiteManager] = None
+        if db_path:
+            self._db = SQLiteManager(db_path)
 
         # Thread management
         self.thread: Optional[threading.Thread] = None
@@ -75,6 +82,17 @@ class PollingThread(ABC):
         self.last_connection_check = None
         self.skip_polls_until = None  # Timestamp until which to skip polling
         self.last_error_message: Optional[str] = None  # Last error message for status reporting
+
+        # 📌 태그 메타데이터 캐시 - 초기화 시 한 번만 로드!
+        self.tag_log_modes: Dict[str, str] = {}
+        self.tag_machine_codes: Dict[str, str] = {}
+        if self._db:
+            self.tag_log_modes = self._load_tag_log_modes()
+            self.tag_machine_codes = self._load_tag_machine_codes()
+            logger.info(
+                f"Loaded tag metadata for group {group.group_name}: "
+                f"{len(self.tag_log_modes)} log_modes, {len(self.tag_machine_codes)} machine_codes"
+            )
 
         logger.info(f"PollingThread initialized: group={group.group_name}, mode={group.mode.value}")
 
@@ -243,6 +261,9 @@ class PollingThread(ABC):
             end_time = time.perf_counter()
             poll_time_ms = (end_time - start_time) * 1000
 
+            # 📌 Use cached tag metadata (loaded once in __init__, no DB queries!)
+            # OracleWriterThread will use these pre-loaded values instead of querying DB
+
             # Create polling data
             polling_data = PollingData(
                 timestamp=datetime.now(),
@@ -253,7 +274,9 @@ class PollingThread(ABC):
                 group_category=self.group.group_category,
                 tag_values=tag_values,
                 poll_time_ms=poll_time_ms,
-                error_tags={}
+                error_tags={},
+                tag_log_modes=self.tag_log_modes,      # ✅ 캐시된 값 사용
+                tag_machine_codes=self.tag_machine_codes  # ✅ 캐시된 값 사용
             )
 
             # Store in queue
@@ -439,3 +462,80 @@ class PollingThread(ABC):
     def is_running(self) -> bool:
         """Check if thread is running"""
         return self.state == ThreadState.RUNNING
+
+    def _load_tag_log_modes(self) -> Dict[str, str]:
+        """
+        Load log_mode for all tags in this polling group from database
+
+        Executed once per polling cycle to avoid repeated DB queries
+        in OracleWriterThread.
+
+        Returns:
+            Dictionary mapping tag_address → log_mode (ALWAYS, ON_CHANGE, NEVER)
+            Example: {'D100': 'ALWAYS', 'D101': 'ON_CHANGE', 'W327C.6': 'NEVER'}
+        """
+        if not self._db:
+            logger.warning(f"Database not available for group {self.group.group_name}")
+            return {}
+
+        tag_log_modes = {}
+        try:
+            # Load log_mode for all tags in this group in a single query
+            with self._db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT tag_address, log_mode
+                    FROM tags
+                    WHERE polling_group_id = ? AND is_active = 1
+                """, (self.group.group_id,))
+
+                for row in cursor.fetchall():
+                    tag_address, log_mode = row
+                    tag_log_modes[tag_address] = log_mode or 'ALWAYS'  # Default to ALWAYS
+
+                logger.debug(
+                    f"Loaded log_modes for {len(tag_log_modes)} tags in group {self.group.group_name}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load log_modes for group {self.group.group_name}: {e}")
+
+        return tag_log_modes
+
+    def _load_tag_machine_codes(self) -> Dict[str, str]:
+        """
+        Load machine_code for all tags in this polling group from database
+
+        Executed once per polling cycle to avoid repeated DB queries
+        in OracleWriterThread.
+
+        Returns:
+            Dictionary mapping tag_address → machine_code (14-digit equipment code)
+            Example: {'D100': 'KRCWO12ELOA101', 'D101': 'KRCWO12ELOB102', ...}
+        """
+        if not self._db:
+            logger.warning(f"Database not available for group {self.group.group_name}")
+            return {}
+
+        tag_machine_codes = {}
+        try:
+            # Load machine_code for all tags in this group in a single query
+            with self._db.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    SELECT tag_address, machine_code
+                    FROM tags
+                    WHERE polling_group_id = ? AND is_active = 1
+                """, (self.group.group_id,))
+
+                for row in cursor.fetchall():
+                    tag_address, machine_code = row
+                    if machine_code:
+                        tag_machine_codes[tag_address] = machine_code
+
+                logger.debug(
+                    f"Loaded machine_codes for {len(tag_machine_codes)} tags in group {self.group.group_name}"
+                )
+        except Exception as e:
+            logger.warning(f"Failed to load machine_codes for group {self.group.group_name}: {e}")
+
+        return tag_machine_codes

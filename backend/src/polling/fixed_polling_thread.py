@@ -25,7 +25,7 @@ class FixedPollingThread(PollingThread):
         _drift: Accumulated timing drift for correction
     """
 
-    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue):
+    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue, db_path: str = None):
         """
         Initialize fixed polling thread
 
@@ -33,6 +33,7 @@ class FixedPollingThread(PollingThread):
             group: PollingGroup configuration (must be FIXED mode)
             pool_manager: PoolManager instance
             data_queue: DataQueue for storing results
+            db_path: Path to SQLite database for loading tag metadata
 
         Raises:
             ValueError: If group mode is not FIXED or interval_ms is None
@@ -43,7 +44,7 @@ class FixedPollingThread(PollingThread):
         if group.interval_ms is None or group.interval_ms < 100:
             raise ValueError(f"FIXED mode requires interval_ms >= 100, got {group.interval_ms}")
 
-        super().__init__(group, pool_manager, data_queue)
+        super().__init__(group, pool_manager, data_queue, db_path=db_path)
 
         # Convert interval to seconds
         self.interval_s = group.interval_ms / 1000.0

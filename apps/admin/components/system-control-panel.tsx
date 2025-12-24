@@ -46,7 +46,7 @@ export function SystemControlPanel() {
       toast.success(result.message);
       fetchStatus();
     } catch (error) {
-      toast.error('Failed to start system');
+      toast.error('시스템 시작에 실패했습니다');
     } finally {
       setActionLoading(false);
     }
@@ -59,7 +59,7 @@ export function SystemControlPanel() {
       toast.success(result.message);
       fetchStatus();
     } catch (error) {
-      toast.error('Failed to stop system');
+      toast.error('시스템 중지에 실패했습니다');
     } finally {
       setActionLoading(false);
     }
@@ -72,7 +72,7 @@ export function SystemControlPanel() {
       toast.success(result.message);
       fetchStatus();
     } catch (error) {
-      toast.error('Failed to restart system');
+      toast.error('시스템 재시작에 실패했습니다');
     } finally {
       setActionLoading(false);
     }
@@ -82,12 +82,12 @@ export function SystemControlPanel() {
     if (!status) return null;
 
     const statusConfig = {
-      running: { color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: CheckCircle2, text: 'Running' },
-      stopped: { color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Square, text: 'Stopped' },
-      starting: { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: Loader2, text: 'Starting...' },
-      stopping: { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: Loader2, text: 'Stopping...' },
-      unavailable: { color: 'bg-red-500/10 text-red-500 border-red-500/20', icon: AlertCircle, text: 'Unavailable' },
-      error: { color: 'bg-red-500/10 text-red-500 border-red-500/20', icon: AlertCircle, text: 'Error' },
+      running: { color: 'bg-green-500/10 text-green-500 border-green-500/20', icon: CheckCircle2, text: '실행 중' },
+      stopped: { color: 'bg-gray-500/10 text-gray-400 border-gray-500/20', icon: Square, text: '중지됨' },
+      starting: { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: Loader2, text: '시작 중...' },
+      stopping: { color: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20', icon: Loader2, text: '중지 중...' },
+      unavailable: { color: 'bg-red-500/10 text-red-500 border-red-500/20', icon: AlertCircle, text: '사용 불가' },
+      error: { color: 'bg-red-500/10 text-red-500 border-red-500/20', icon: AlertCircle, text: '오류' },
     };
 
     const config = statusConfig[status.status] || statusConfig.unavailable;
@@ -106,7 +106,7 @@ export function SystemControlPanel() {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    return `${hours}h ${minutes}m ${secs}s`;
+    return `${hours}시간 ${minutes}분 ${secs}초`;
   };
 
   if (loading) {
@@ -125,7 +125,7 @@ export function SystemControlPanel() {
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2 text-white">
             <Power className="h-5 w-5 text-blue-500" />
-            System Control
+            시스템 제어
           </CardTitle>
           {getStatusBadge()}
         </div>
@@ -134,15 +134,15 @@ export function SystemControlPanel() {
         {/* System Info */}
         <div className="grid grid-cols-3 gap-4 text-sm">
           <div className="flex flex-col gap-1">
-            <span className="text-gray-400">Status</span>
-            <span className="font-semibold text-white capitalize">{status?.status || 'Unknown'}</span>
+            <span className="text-gray-400">상태</span>
+            <span className="font-semibold text-white capitalize">{status?.status || '알 수 없음'}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-gray-400">Groups Loaded</span>
+            <span className="text-gray-400">로드된 그룹</span>
             <span className="font-semibold text-white">{status?.polling_groups_loaded || 0}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-gray-400">Groups Running</span>
+            <span className="text-gray-400">실행 중인 그룹</span>
             <span className="font-semibold text-white">{status?.polling_groups_running || 0}</span>
           </div>
         </div>
@@ -150,7 +150,7 @@ export function SystemControlPanel() {
         {status?.status === 'running' && status.uptime_seconds !== undefined && (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <Clock className="h-4 w-4 text-blue-400" />
-            <span className="text-sm text-blue-400">Uptime: {formatUptime(status.uptime_seconds)}</span>
+            <span className="text-sm text-blue-400">실행 시간: {formatUptime(status.uptime_seconds)}</span>
           </div>
         )}
 
@@ -166,7 +166,7 @@ export function SystemControlPanel() {
             ) : (
               <Play className="h-4 w-4 mr-2" />
             )}
-            Start
+            시작
           </Button>
 
           <Button
@@ -180,7 +180,7 @@ export function SystemControlPanel() {
             ) : (
               <Square className="h-4 w-4 mr-2" />
             )}
-            Stop
+            중지
           </Button>
 
           <Button
@@ -194,7 +194,7 @@ export function SystemControlPanel() {
             ) : (
               <RotateCw className="h-4 w-4 mr-2" />
             )}
-            Restart
+            재시작
           </Button>
         </div>
 
@@ -203,9 +203,9 @@ export function SystemControlPanel() {
           <div className="flex items-start gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
             <AlertCircle className="h-4 w-4 text-yellow-500 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-yellow-500 font-medium">System is stopped</p>
+              <p className="text-sm text-yellow-500 font-medium">시스템이 중지되었습니다</p>
               <p className="text-xs text-yellow-600 mt-1">
-                Configure PLCs and polling groups, then click Start to begin data collection.
+                PLC와 폴링 그룹을 설정한 후 시작 버튼을 클릭하여 데이터 수집을 시작하세요.
               </p>
             </div>
           </div>

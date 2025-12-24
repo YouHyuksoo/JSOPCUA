@@ -27,7 +27,7 @@ class HandshakePollingThread(PollingThread):
         dedup_window_s: Deduplication window in seconds (default: 1.0)
     """
 
-    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue):
+    def __init__(self, group: PollingGroup, pool_manager, data_queue: DataQueue, db_path: str = None):
         """
         Initialize handshake polling thread
 
@@ -35,6 +35,7 @@ class HandshakePollingThread(PollingThread):
             group: PollingGroup configuration (must be HANDSHAKE mode)
             pool_manager: PoolManager instance
             data_queue: DataQueue for storing results
+            db_path: Path to SQLite database for loading tag metadata
 
         Raises:
             ValueError: If group mode is not HANDSHAKE
@@ -42,7 +43,7 @@ class HandshakePollingThread(PollingThread):
         if group.mode != PollingMode.HANDSHAKE:
             raise ValueError(f"HandshakePollingThread requires HANDSHAKE mode, got {group.mode.value}")
 
-        super().__init__(group, pool_manager, data_queue)
+        super().__init__(group, pool_manager, data_queue, db_path=db_path)
 
         # Trigger mechanism
         self.trigger_event = threading.Event()

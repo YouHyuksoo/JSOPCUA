@@ -21,6 +21,29 @@ router = APIRouter(prefix="/api/workstages", tags=["workstages"])
 
 
 # ==============================================================================
+# Helper function to convert database row to WorkstageResponse
+# ==============================================================================
+
+def _row_to_workstage_response(row):
+    """
+    Convert workstages table row to WorkstageResponse
+
+    Row format: (id, workstage_code, workstage_name, description, sequence_order, is_active, created_at, updated_at)
+    """
+    return WorkstageResponse(
+        id=row[0],
+        machine_code=None,
+        workstage_sequence=row[4],  # sequence_order
+        workstage_code=row[1],
+        workstage_name=row[2],
+        equipment_type=row[3],  # description
+        enabled=bool(row[5]),  # is_active
+        created_at=row[6],
+        updated_at=row[7]
+    )
+
+
+# ==============================================================================
 # POST /api/workstages - Create new workstage
 # ==============================================================================
 
@@ -76,18 +99,7 @@ def create_workstage(workstage: WorkstageCreate, db: SQLiteManager = Depends(get
         cursor.execute("SELECT * FROM workstages WHERE id = ?", (workstage_id,))
         row = cursor.fetchone()
 
-    # Row format: (id, workstage_code, workstage_name, description, sequence_order, is_active, created_at, updated_at)
-    return WorkstageResponse(
-        id=row[0],
-        machine_code=None,  # Not in workstages table
-        workstage_sequence=row[4],  # sequence_order
-        workstage_code=row[1],
-        workstage_name=row[2],
-        equipment_type=row[3],  # description
-        enabled=bool(row[5]),  # is_active
-        created_at=row[6],
-        updated_at=row[7]
-    )
+    return _row_to_workstage_response(row)
 
 
 # ==============================================================================
@@ -123,21 +135,7 @@ def list_workstages(
         """, (pagination.limit, pagination.skip))
         rows = cursor.fetchall()
 
-    # Row format: (id, workstage_code, workstage_name, description, sequence_order, is_active, created_at, updated_at)
-    workstages = [
-        WorkstageResponse(
-            id=row[0],
-            machine_code=None,  # Not in workstages table
-            workstage_sequence=row[4],  # sequence_order
-            workstage_code=row[1],
-            workstage_name=row[2],
-            equipment_type=row[3],  # description
-            enabled=bool(row[5]),  # is_active
-            created_at=row[6],
-            updated_at=row[7]
-        )
-        for row in rows
-    ]
+    workstages = [_row_to_workstage_response(row) for row in rows]
 
     metadata = pagination.get_pagination_metadata(total_count)
 
@@ -168,18 +166,7 @@ def get_workstage(workstage_id: int, db: SQLiteManager = Depends(get_db)):
     if not row:
         raise_not_found("Workstage", workstage_id)
 
-    # Row format: (id, workstage_code, workstage_name, description, sequence_order, is_active, created_at, updated_at)
-    return WorkstageResponse(
-        id=row[0],
-        machine_code=None,  # Not in workstages table
-        workstage_sequence=row[4],  # sequence_order
-        workstage_code=row[1],
-        workstage_name=row[2],
-        equipment_type=row[3],  # description
-        enabled=bool(row[5]),  # is_active
-        created_at=row[6],
-        updated_at=row[7]
-    )
+    return _row_to_workstage_response(row)
 
 
 # ==============================================================================
@@ -236,7 +223,7 @@ def update_workstage(
         # No changes, return current workstage
         return get_workstage(workstage_id, db)
 
-    # Add updated_at
+    # Add updated_at and workstage_id for WHERE clause
     updates.append("updated_at = CURRENT_TIMESTAMP")
     params.append(workstage_id)
 
@@ -305,7 +292,6 @@ def get_oracle_connection_info():
         return config.to_dict()
     except Exception as e:
         from src.config.logging_config import get_logger
-
         logger = get_logger(__name__)
         logger.error(f"Failed to load Oracle config: {str(e)}")
         raise HTTPException(

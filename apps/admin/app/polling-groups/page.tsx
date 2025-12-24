@@ -61,6 +61,7 @@ export default function PollingGroupsPage() {
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">ID</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">이름</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">동작구분</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">설명</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">주기(ms)</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase">태그 수</th>
@@ -68,30 +69,51 @@ export default function PollingGroupsPage() {
               </tr>
             </thead>
             <tbody className="bg-gray-900 divide-y divide-gray-800">
-              {groups.map((group) => (
-                <tr key={group.id} className="hover:bg-gray-800/50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{group.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate" title={group.description || ''}>
-                    {group.description || '-'}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.polling_interval} ms</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="text-blue-400 font-medium">{group.tag_count}</span>
-                      <span className="text-gray-500">개</span>
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
-                    <Link href={`/polling-groups/${group.id}`}>
-                      <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">편집</Button>
-                    </Link>
-                    <Button size="sm" variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/20" onClick={() => setDeleteId(group.id)}>
-                      삭제
-                    </Button>
-                  </td>
-                </tr>
-              ))}
+              {groups.map((group) => {
+                // 동작구분 배지 색상 지정
+                const getCategoryColor = (category?: string | null) => {
+                  switch (category) {
+                    case 'ALARM':
+                      return 'bg-red-500/10 text-red-400';
+                    case 'STATE':
+                      return 'bg-blue-500/10 text-blue-400';
+                    case 'OPERATION':
+                      return 'bg-green-500/10 text-green-400';
+                    default:
+                      return 'bg-gray-500/10 text-gray-400';
+                  }
+                };
+
+                return (
+                  <tr key={group.id} className="hover:bg-gray-800/50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.id}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-100">{group.name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCategoryColor(group.group_category)}`}>
+                        {group.group_category || 'OPERATION'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-300 max-w-xs truncate" title={group.description || ''}>
+                      {group.description || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{group.polling_interval} ms</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
+                      <span className="inline-flex items-center gap-1">
+                        <span className="text-blue-400 font-medium">{group.tag_count}</span>
+                        <span className="text-gray-500">개</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                      <Link href={`/polling-groups/${group.id}`}>
+                        <Button size="sm" variant="outline" className="bg-gray-800 border-gray-700 hover:bg-gray-700">편집</Button>
+                      </Link>
+                      <Button size="sm" variant="destructive" className="bg-red-500/10 text-red-500 hover:bg-red-500/20" onClick={() => setDeleteId(group.id)}>
+                        삭제
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
