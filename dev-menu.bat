@@ -46,11 +46,12 @@ echo.
 echo   [Utility]
 echo    21. Kill All Dev Ports (8000, 3000, 3001)
 echo    22. Run Backend Tests
+echo    23. Clean Install (Delete node_modules + npm install)
 echo.
 echo     0. Exit
 echo.
 echo ========================================================================
-set /p choice="Select (0-22): "
+set /p choice="Select (0-23): "
 
 if "%choice%"=="1" goto CLONE
 if "%choice%"=="2" goto INITIAL_SETUP
@@ -74,6 +75,7 @@ if "%choice%"=="19" goto PM2_LOGS
 if "%choice%"=="20" goto AUTO_STARTUP
 if "%choice%"=="21" goto KILL_ALL_PORTS
 if "%choice%"=="22" goto RUN_TESTS
+if "%choice%"=="23" goto CLEAN_INSTALL
 if "%choice%"=="0" goto END
 
 echo.
@@ -588,6 +590,70 @@ if not exist ".venv\Scripts\activate.bat" (
 echo Running pytest...
 call .venv\Scripts\activate.bat
 pytest tests\ -v
+pause
+goto MENU
+
+:CLEAN_INSTALL
+cls
+echo ========================================================
+echo        Clean Install (Reset node_modules)
+echo ========================================================
+echo.
+echo [WARNING] This will delete all node_modules and reinstall!
+echo.
+set /p confirm="Continue? (Y/N): "
+if /i "%confirm%" neq "Y" goto MENU
+
+cd /d "%~dp0"
+
+echo.
+echo [1/5] Deleting root node_modules...
+if exist "node_modules" (
+    rmdir /s /q node_modules
+    echo [OK] Deleted node_modules
+) else (
+    echo [INFO] node_modules not found
+)
+
+echo [2/5] Deleting apps\admin\node_modules...
+if exist "apps\admin\node_modules" (
+    rmdir /s /q apps\admin\node_modules
+    echo [OK] Deleted apps\admin\node_modules
+) else (
+    echo [INFO] apps\admin\node_modules not found
+)
+
+echo [3/5] Deleting apps\monitor\node_modules...
+if exist "apps\monitor\node_modules" (
+    rmdir /s /q apps\monitor\node_modules
+    echo [OK] Deleted apps\monitor\node_modules
+) else (
+    echo [INFO] apps\monitor\node_modules not found
+)
+
+echo [4/5] Deleting package-lock.json...
+if exist "package-lock.json" (
+    del /f package-lock.json
+    echo [OK] Deleted package-lock.json
+) else (
+    echo [INFO] package-lock.json not found
+)
+
+echo.
+echo [5/5] Running npm install...
+call npm install --legacy-peer-deps
+IF %ERRORLEVEL% NEQ 0 (
+    echo [ERROR] npm install failed
+    pause
+    goto MENU
+)
+
+echo.
+echo ========================================================
+echo [OK] Clean install complete!
+echo ========================================================
+echo.
+echo [NEXT] Run option 10 to build the project
 pause
 goto MENU
 
