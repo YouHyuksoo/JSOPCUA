@@ -2,7 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { pollingGroupSchema, PollingGroupFormData } from '@/lib/validators/polling-group';
+import { pollingGroupSchema, PollingGroupFormData, GroupCategory } from '@/lib/validators/polling-group';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -42,11 +42,12 @@ export default function PollingGroupForm({ defaultValues, tags, initialTagIds = 
       name: defaultValues.name,
       description: defaultValues.description || '',
       polling_interval_ms: defaultValues.polling_interval,
-      group_category: defaultValues.group_category || 'OPERATION',
+      group_category: (defaultValues.group_category || 'OPERATION') as GroupCategory,
       tag_ids: initialTagIds,
     } : {
+      name: '',
       polling_interval_ms: 1000,
-      group_category: 'OPERATION',
+      group_category: 'OPERATION' as GroupCategory,
       tag_ids: [],
     },
   });
