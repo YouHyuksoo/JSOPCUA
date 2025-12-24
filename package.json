@@ -13,6 +13,9 @@
     "build:admin": "npm run build --workspace=apps/admin",
     "build:monitor": "npm run build --workspace=apps/monitor",
     "build": "npm run build:admin && npm run build:monitor",
+    "start:admin": "npm run start --workspace=apps/admin",
+    "start:monitor": "npm run start --workspace=apps/monitor",
+    "start": "concurrently \"npm run start:admin\" \"npm run start:monitor\"",
     "lint": "npm run lint --workspaces --if-present",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules"
   },
