@@ -20,6 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 venv/
+.venv/
 ENV/
 env/
 
@@ -64,6 +65,7 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+nul
 
 # Backup files
 *.bak
